@@ -119,7 +119,7 @@ impl Persistencer {
         mmap.flush_async().unwrap();
     }
 
-    pub fn flush(&self, flushing: Arc<DashMap<PageId, Arc<MmapMut>>>) {
+    pub fn log(&self, logging: &DashMap<PageId, Arc<MmapMut>>) {
         let log_dir1 = format!("{}/log/log_", self.root_dir);
         let log_file = File::options()
             .read(true)
@@ -127,7 +127,7 @@ impl Persistencer {
             .create_new(true)
             .open(&log_dir1)
             .unwrap();
-        let len = flushing.len();
+        let len = logging.len();
         let id_n_per_page = PAGE_SIZE.div_floor(size_of::<PageId>());
         let id_page_n =
             (len + size_of::<usize>().div_ceil(size_of::<PageId>())).div_ceil(id_n_per_page);
@@ -139,17 +139,20 @@ impl Persistencer {
         let (_preffix, page_ids, _suffix) = unsafe { slice1.align_to_mut::<PageId>() };
         slice3.copy_from_slice(&u64::to_le_bytes(len as u64));
         let (pages, _remainder) = slice2.as_chunks_mut::<PAGE_SIZE>();
-        for (idx, e) in flushing.iter().enumerate() {
+        for (idx, e) in logging.iter().enumerate() {
             page_ids[idx] = *e.key();
             pages[idx].clone_from_slice(e.value());
         }
         mmap.flush_async().unwrap();
         let log_dir = format!("{}/log/log", self.root_dir);
         rename(log_dir1, &log_dir).unwrap();
+    }
+
+    pub fn flush(&self, flushing: &DashMap<PageId, Arc<MmapMut>>) {
         for e in flushing.iter() {
             self.save_mmap(*e.key(), e.value());
         }
+        let log_dir = format!("{}/log/log", self.root_dir);
         remove_file(log_dir).unwrap();
-        flushing.clear();
     }
 }

@@ -119,4 +119,5 @@ fn test2() {
     for h in handlers {
         h.join().unwrap();
     }
+    handler.lock().unwrap().take().unwrap().join().unwrap();
 }
