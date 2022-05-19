@@ -7,7 +7,7 @@ extern crate core;
 
 mod btree_node;
 mod btree_util;
-// mod crabbing;
+mod crabbing;
 mod page_manager;
 mod page_system;
 mod util;

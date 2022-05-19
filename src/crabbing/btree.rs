@@ -1,15 +1,12 @@
-use std::{
-    sync::{Arc, RwLock, RwLockWriteGuard},
-    thread::JoinHandle,
-};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
-use super::{
-    btree_node::btree_node::{DataNode, InnerNode, Node},
-    btree_store::{
+use crate::{
+    btree_node::{
+        btree_node::{DataNode, InnerNode, Node},
         btree_store::{BTreeStore, DEFAULT_BTREE_STORE_CONFIG},
-        meta_page::MetaPage,
     },
-    page_manager::page::PageId,
+    btree_util::meta_page::MetaPage,
+    page_manager::{page::PageId, FlushHandler},
     util::KV,
 };
 
@@ -36,7 +33,6 @@ enum RemoveRtn<K> {
     ChangeKey { old: K, key: K },
 }
 
-#[derive(Clone)]
 pub struct BTree<K: Clone + PartialOrd, V: Clone> {
     pub store: Arc<BTreeStore<K, V>>,
     config: BTreeConfig,
@@ -501,7 +497,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTree<K, V> {
     }
 
     #[inline]
-    pub fn flush_pages(&mut self) -> Option<JoinHandle<()>> {
+    pub fn flush(&mut self) -> FlushHandler {
         self.store.flush()
     }
 

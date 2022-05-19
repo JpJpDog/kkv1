@@ -283,8 +283,8 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
     /// insert after block `at` with block `id`. unsafe if at or id is out of range or not in use
     pub fn insert_after(&mut self, at: BlockId, id: BlockId) {
         if at != Self::NULL_ID {
-            let prev = self.block(at);
-            self.set_block_next(id, prev.next);
+            let next = self.block(at).next;
+            self.set_block_next(id, next);
             self.set_block_next(at, id);
         } else {
             self.set_block_next(id, self.meta().head);

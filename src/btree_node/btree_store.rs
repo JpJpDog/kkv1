@@ -53,7 +53,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
         let val = unsafe { MaybeUninit::uninit().assume_init() };
         root_node.insert(&min_key, &val);
         {
-            let mut meta_g = unsafe { meta_page.write() };
+            let mut meta_g = meta_page.write();
             let meta = meta_g.meta_mut();
             meta.root = root_id;
             meta.depth = 1;

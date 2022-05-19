@@ -7,7 +7,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc, RwLock,
     },
-    thread::{spawn, JoinHandle},
+    thread::spawn,
 };
 
 use rand::{
@@ -16,6 +16,8 @@ use rand::{
 };
 
 // use super::util::make_test_dir;
+
+use crate::page_manager::{p_manager::FHandler, FlushHandler};
 
 use super::btree::{BTree, DEFAULT_BTREE_CONFIG};
 
@@ -33,7 +35,7 @@ fn test_random_insert_s() {
     let batch_size = 100;
     let batch_n = total_n / batch_size;
     let mut rng = StdRng::seed_from_u64(0);
-    let mut handler: Option<JoinHandle<()>> = None;
+    let mut handler: Option<FlushHandler> = None;
     for _j in 0..batch_n {
         let mut cnt = 0;
         while cnt < batch_size {
@@ -50,15 +52,17 @@ fn test_random_insert_s() {
                 cnt += 1;
             }
         }
-        if let Some(h) = handler {
-            h.join().unwrap();
+        if let Some(mut h) = handler {
+            h.join();
         }
 
         // // todo: add in update
         btree.update_cache();
-        handler = Some(btree.flush().unwrap());
+        handler = Some(btree.flush());
     }
-    handler.unwrap().join().unwrap();
+    if let Some(mut h) = handler {
+        h.join();
+    }
 }
 
 #[test]
@@ -70,7 +74,7 @@ fn test_random_insert_m() {
     let mut config = DEFAULT_BTREE_CONFIG;
     config.node_cap = 10;
     let btree = BTree::<u32, u32>::new(test_dir, 0, config);
-    let btree1: Arc<RwLock<(BTree<u32, u32>, Option<JoinHandle<()>>)>> =
+    let btree1: Arc<RwLock<(BTree<u32, u32>, Option<FlushHandler>)>> =
         Arc::new(RwLock::new((btree, None)));
     let total_n = 1000;
     let max_key = 100000;
@@ -100,10 +104,10 @@ fn test_random_insert_m() {
                 let mut btree_g = btree.write().unwrap();
                 let mut h1 = None;
                 swap(&mut h1, &mut btree_g.1);
-                if let Some(h) = h1 {
-                    h.join().unwrap();
+                if let Some(mut h) = h1 {
+                    h.join();
                 }
-                btree_g.1 = Some(btree_g.0.flush().unwrap());
+                btree_g.1 = Some(btree_g.0.flush());
                 btree_g.0.update_cache();
             }
             if old_n >= total_n {
@@ -118,8 +122,8 @@ fn test_random_insert_m() {
     match Arc::try_unwrap(btree1) {
         Ok(a) => {
             let (_btree, h) = a.into_inner().unwrap();
-            if let Some(h) = h {
-                h.join().unwrap();
+            if let Some(mut h) = h {
+                h.join();
             }
         }
         Err(_) => panic!(),
@@ -136,7 +140,7 @@ fn seq_insert_remove_s() {
     let mut config = DEFAULT_BTREE_CONFIG;
     config.node_cap = 10;
     let mut btree = BTree::<u32, u32>::new(test_dir, 0, config);
-    let mut handler: Option<JoinHandle<()>> = None;
+    let mut handler: Option<FlushHandler> = None;
     let total_n = 1000;
     let max_key = 100000;
     let batch_size = 100;
@@ -147,10 +151,10 @@ fn seq_insert_remove_s() {
         btree.insert(&key, &val);
         keys.push(key);
         if i % batch_size == 0 {
-            if let Some(h) = handler {
-                h.join().unwrap();
+            if let Some(mut h) = handler {
+                h.join();
             }
-            handler = btree.flush();
+            handler = Some(btree.flush());
         }
     }
     // btree.store.dump();
@@ -164,14 +168,14 @@ fn seq_insert_remove_s() {
         // println!();
         assert!(!btree.get(&k, &mut val));
         if i % batch_size == 0 {
-            if let Some(h) = handler {
-                h.join().unwrap();
+            if let Some(mut h) = handler {
+                h.join();
             }
-            handler = btree.flush();
+            handler = Some(btree.flush());
         }
     }
-    if let Some(h) = handler {
-        h.join().unwrap();
+    if let Some(mut h) = handler {
+        h.join();
     }
 }
 
