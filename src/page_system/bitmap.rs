@@ -2,7 +2,11 @@ use std::{mem::size_of, ptr::NonNull, sync::Arc};
 
 use memmap2::MmapMut;
 
-use super::page_manager::page::{Page, PageId, PageManager, PageRef};
+use crate::page_manager::{
+    p_manager::PManager,
+    page::{Page, PageId, PageRef},
+    page_manager::PageManager,
+};
 
 pub type BmKey = u16;
 
@@ -29,10 +33,10 @@ impl PageRef for BitMapPageRef {
     }
 }
 
-pub type BitMapPage = Page<BitMapPageRef>;
+pub type BitMapPage = Page<BitMapPageRef, PageManager>;
 
 pub struct BitMap {
-    bm_page: Page<BitMapPageRef>,
+    bm_page: Page<BitMapPageRef, PageManager>,
     // cache of bitmap. Every 8 bit in `bm_page.map` corresponds to one bit in the lowest layer cache.
     // If cache is 1, it means all 8 bit in `bm_page.map` has be allocated already.
     indexes: Vec<Box<[u8]>>,
@@ -189,7 +193,7 @@ impl BitMap {
 
     #[inline]
     pub fn page_id(&self) -> PageId {
-        self.bm_page.page_id()
+        self.bm_page.page_id
     }
 
     #[inline]
@@ -201,10 +205,12 @@ impl BitMap {
 #[cfg(test)]
 mod test {
 
-    use std::{path::Path, fs::remove_dir_all};
+    use std::{fs::remove_dir_all, path::Path};
 
-    use rand::{prelude::StdRng, Rng, SeedableRng};
+    use crate::page_manager::p_manager::FHandler;
+
     use super::*;
+    use rand::{prelude::StdRng, Rng, SeedableRng};
 
     #[test]
     fn test_seq() {
@@ -220,7 +226,7 @@ mod test {
                 let key = bm.mark().unwrap();
                 assert_eq!(key, i as BmKey);
             }
-            pm.flush();
+            pm.flush().join();
             bm = unsafe { BitMap::load(0, pm.clone()) };
             assert!(bm.mark().is_none());
             for i in 0..cap {
@@ -261,7 +267,7 @@ mod test {
                     assert!(bm.unmark(key));
                 }
             } else {
-                pm.flush();
+                pm.flush().join();
                 bm = unsafe { BitMap::load(0, pm.clone()) };
             }
             assert_eq!(bm.meta().len, keys.len() as BmKey);

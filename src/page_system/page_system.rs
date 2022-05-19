@@ -1,11 +1,12 @@
-use std::{
-    sync::{Arc, RwLock},
-    thread::JoinHandle,
-};
+use std::sync::{Arc, RwLock};
 
 use super::bitmap_list::BitMapList;
 
-use super::page_manager::page::{Page, PageId, PageManager, PageRef};
+use crate::page_manager::{
+    p_manager::PManager,
+    page::{Page, PageId, PageRef},
+    page_manager::{FlushHandler, PageManager},
+};
 
 pub struct PageSystem {
     pm: Arc<PageManager>,
@@ -30,31 +31,26 @@ impl PageSystem {
     }
 
     #[inline]
-    pub fn new_page<T: PageRef>(&self) -> Page<T> {
+    pub fn new_page<T: PageRef>(&self) -> Page<T, PageManager> {
         let page_id = self.bms.write().unwrap().mark();
         PageManager::new_page(self.pm.clone(), page_id)
     }
 
     #[inline]
-    pub unsafe fn load_page<T: PageRef>(&self, page_id: PageId) -> Page<T> {
+    pub unsafe fn load_page<T: PageRef>(&self, page_id: PageId) -> Page<T, PageManager> {
         assert!(self.bms.read().unwrap().check(page_id));
         PageManager::load_page(self.pm.clone(), page_id)
     }
 
     #[inline]
-    pub fn delete_page<T: PageRef>(&self, page: &Page<T>) {
-        assert!(self.bms.write().unwrap().unmark(page.page_id()));
+    pub fn delete_page<T: PageRef>(&self, page: &Page<T, PageManager>) {
+        assert!(self.bms.write().unwrap().unmark(page.page_id));
         // todo! delete page in page_manager
         // self.pm.delete_page(page)
     }
 
     #[inline]
-    pub fn flush(&self) {
+    pub fn flush(&self) -> FlushHandler {
         self.pm.flush()
-    }
-
-    #[inline]
-    pub async fn flush_async(&self) {
-        self.pm.flush_async().await
     }
 }

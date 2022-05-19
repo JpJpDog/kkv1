@@ -9,7 +9,7 @@ extern crate core;
 // mod btree_store;
 // mod crabbing;
 mod page_manager;
-// mod page_system;
+mod page_system;
 // mod util;
 
 #[cfg(test)]

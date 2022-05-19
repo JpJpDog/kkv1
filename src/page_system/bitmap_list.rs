@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::page_manager::page::{PageId, PageManager};
+use crate::page_manager::{page::PageId, page_manager::PageManager};
 
 use super::bitmap::{BitMap, BmKey};
 
@@ -101,6 +101,8 @@ impl BitMapList {
 mod test {
     use std::{fs::remove_dir_all, path::Path};
 
+    use crate::page_manager::p_manager::{PManager, FHandler};
+
     use super::*;
 
     #[test]
@@ -152,14 +154,14 @@ mod test {
             for _i in 0..len {
                 assert!(bms.unmark(ids.pop().unwrap()));
             }
-            pm.flush();
+            pm.flush().join();
 
             let pm = Arc::new(PageManager::load(test_dir));
             let mut bms = BitMapList::load(0, pm.clone());
             for id in ids {
                 assert!(bms.unmark(id));
             }
-            pm.flush();
+            pm.flush().join();
 
             let pm = Arc::new(PageManager::load(test_dir));
             let bms = BitMapList::load(0, pm);
