@@ -3,9 +3,8 @@ use std::sync::{Arc, RwLock};
 use super::bitmap_list::BitMapList;
 
 use crate::page_manager::{
-    p_manager::PManager,
-    page::{Page, PageId, PageRef},
-    page_manager::{FlushHandler, PageManager},
+    page::{PageId, PageRef},
+    Page, PageManager, p_manager::PManager, FlushHandler,
 };
 
 pub struct PageSystem {
@@ -31,19 +30,19 @@ impl PageSystem {
     }
 
     #[inline]
-    pub fn new_page<T: PageRef>(&self) -> Page<T, PageManager> {
+    pub fn new_page<T: PageRef>(&self) -> Page<T> {
         let page_id = self.bms.write().unwrap().mark();
         PageManager::new_page(self.pm.clone(), page_id)
     }
 
     #[inline]
-    pub unsafe fn load_page<T: PageRef>(&self, page_id: PageId) -> Page<T, PageManager> {
+    pub unsafe fn load_page<T: PageRef>(&self, page_id: PageId) -> Page<T> {
         assert!(self.bms.read().unwrap().check(page_id));
         PageManager::load_page(self.pm.clone(), page_id)
     }
 
     #[inline]
-    pub fn delete_page<T: PageRef>(&self, page: &Page<T, PageManager>) {
+    pub fn delete_page<T: PageRef>(&self, page: &Page<T>) {
         assert!(self.bms.write().unwrap().unmark(page.page_id));
         // todo! delete page in page_manager
         // self.pm.delete_page(page)

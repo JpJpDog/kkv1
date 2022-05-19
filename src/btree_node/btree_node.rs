@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 
-use super::{page_manager::page::PageId, page_system::page_system::PageSystem, util::KV};
+use crate::{page_manager::page::PageId, page_system::page_system::PageSystem, util::KV};
 
 use super::{
     node_page_list::{Block, BlockId, NodePageList},
@@ -262,12 +262,14 @@ impl<K: PartialOrd + Clone> InnerNode<K> {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        collections::HashSet, fs::remove_dir_all, future::Future, path::Path, sync::Arc,
-        thread::JoinHandle,
-    };
+    use std::{collections::HashSet, fs::remove_dir_all, path::Path, sync::Arc};
 
     use rand::{prelude::StdRng, Rng, SeedableRng};
+
+    use crate::{
+        page_manager::{p_manager::FHandler, FlushHandler},
+        page_system::page_system::PageSystem,
+    };
 
     use super::*;
 
@@ -283,7 +285,7 @@ mod test {
         let mut key_set = HashSet::new();
         let test_n = 50000;
         let mut rng = StdRng::seed_from_u64(0);
-        let mut handler = None;
+        let mut handler: Option<FlushHandler> = None;
         for i in 0..test_n {
             let op = rng.gen::<u8>() % 100;
             if op < 40 {
@@ -331,11 +333,14 @@ mod test {
                     assert!(!node.remove(&key));
                 }
             } else {
-                if let Some(h) = handler {
-                    h.await;
+                if let Some(mut h) = handler {
+                    h.join();
                 }
-                handler = Some(ps.flush_async());
+                handler = Some(ps.flush());
             }
+        }
+        if let Some(mut h) = handler {
+            h.join();
         }
     }
 
@@ -355,7 +360,7 @@ mod test {
         let (right_id, mut right) = InnerNode::new(&ps.clone(), node_n, 0);
 
         node.split_to(&mut right, None);
-        ps.flush();
+        ps.flush().join();
 
         let ps = Arc::new(unsafe { PageSystem::load(test_dir) });
         unsafe {

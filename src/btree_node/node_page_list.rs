@@ -5,8 +5,11 @@ use std::{
 
 use memmap2::MmapMut;
 
-use super::{
-    page_manager::page::{Page, PageId, PageRef},
+use crate::{
+    page_manager::{
+        page::{PageId, PageRef},
+        Page,
+    },
     page_system::page_system::PageSystem,
     util::KV,
 };
@@ -110,7 +113,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
         let mut nexts = Vec::new();
         for _i in 1..node_n {
             pgs.push(ps.new_page());
-            nexts.push(pgs.last().unwrap().page_id());
+            nexts.push(pgs.last().unwrap().page_id);
         }
         nexts.push(PageId::MAX);
 
@@ -156,7 +159,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
             pg.write().blocks_mut()[first_cap as usize - 1].next = Self::NULL_ID;
         };
         (
-            pg.page_id(),
+            pg.page_id,
             Self {
                 first_cap,
                 others_cap,
@@ -334,7 +337,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
     /// this is the node id of current node
     #[inline]
     pub fn first_id(&self) -> PageId {
-        self.first.page_id()
+        self.first.page_id
     }
 
     pub fn first_prev(&self) -> PageId {
@@ -393,7 +396,7 @@ mod test {
 
             for j in 0..cap {
                 let id = nodes.alloc().unwrap();
-                unsafe { nodes.insert_after(NodePageList::<u32, u32>::NULL_ID, id) };
+                nodes.insert_after(NodePageList::<u32, u32>::NULL_ID, id);
                 if j % 1000 == 0 {
                     nodes.check();
                 }
@@ -448,7 +451,7 @@ mod test {
                         }
                     };
                     // println!("insert after {} with {}", at, id);
-                    unsafe { nodes.insert_after(at, id) };
+                    nodes.insert_after(at, id);
                     ids.push(id);
                     id_set.insert(id);
                 }
@@ -477,7 +480,7 @@ mod test {
                 let id = unsafe { nodes.remove_after(at) };
                 // println!("remove after {} is {}", at, id);
                 assert!(id_set.remove(&id));
-                unsafe { nodes.free(id) };
+                nodes.free(id);
             }
         }
     }

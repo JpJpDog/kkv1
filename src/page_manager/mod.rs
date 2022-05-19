@@ -1,8 +1,17 @@
-pub mod page;
+use self::{
+    page::PageInner,
+    page_manager::{FlushHandler1, PageManager1},
+};
+
 pub mod p_manager;
-pub mod page_manager;
+pub mod page;
+mod page_manager;
 mod page_manager_1;
 mod persistencer;
 
 #[cfg(test)]
 mod test;
+
+pub type Page<T> = PageInner<T, PageManager1>;
+pub type FlushHandler = FlushHandler1;
+pub type PageManager = PageManager1;

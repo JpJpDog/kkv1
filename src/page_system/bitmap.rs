@@ -3,9 +3,8 @@ use std::{mem::size_of, ptr::NonNull, sync::Arc};
 use memmap2::MmapMut;
 
 use crate::page_manager::{
-    p_manager::PManager,
-    page::{Page, PageId, PageRef},
-    page_manager::PageManager,
+    page::{PageId, PageRef},
+    Page, PageManager, p_manager::PManager,
 };
 
 pub type BmKey = u16;
@@ -33,10 +32,10 @@ impl PageRef for BitMapPageRef {
     }
 }
 
-pub type BitMapPage = Page<BitMapPageRef, PageManager>;
+pub type BitMapPage = Page<BitMapPageRef>;
 
 pub struct BitMap {
-    bm_page: Page<BitMapPageRef, PageManager>,
+    bm_page: Page<BitMapPageRef>,
     // cache of bitmap. Every 8 bit in `bm_page.map` corresponds to one bit in the lowest layer cache.
     // If cache is 1, it means all 8 bit in `bm_page.map` has be allocated already.
     indexes: Vec<Box<[u8]>>,
@@ -207,7 +206,7 @@ mod test {
 
     use std::{fs::remove_dir_all, path::Path};
 
-    use crate::page_manager::p_manager::FHandler;
+    use crate::page_manager::p_manager::{FHandler, PManager};
 
     use super::*;
     use rand::{prelude::StdRng, Rng, SeedableRng};

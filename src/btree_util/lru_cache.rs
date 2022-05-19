@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash, mem::MaybeUninit, ptr::NonNull};
 
-use super::util::KV;
+use crate::util::KV;
 
 struct CacheNode<K, V> {
     kv: KV<K, V>,

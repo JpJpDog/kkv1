@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use memmap2::MmapMut;
 
-use super::page::{Page, PageId, PageRef};
+use super::page::{PageInner, PageId, PageRef};
 
 pub trait FHandler {
     fn join(&mut self);
@@ -15,11 +15,11 @@ pub trait PManager {
 
     unsafe fn load(root_dir: &str) -> Self;
 
-    fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> Page<T, Self>
+    fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
     where
         Self: Sized;
 
-    unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> Page<T, Self>
+    unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
     where
         Self: Sized;
 

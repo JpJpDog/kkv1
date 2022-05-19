@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::page_manager::{page::PageId, page_manager::PageManager};
+use crate::page_manager::{page::PageId, PageManager};
 
 use super::bitmap::{BitMap, BmKey};
 
@@ -101,7 +101,7 @@ impl BitMapList {
 mod test {
     use std::{fs::remove_dir_all, path::Path};
 
-    use crate::page_manager::p_manager::{PManager, FHandler};
+    use crate::page_manager::p_manager::{FHandler, PManager};
 
     use super::*;
 

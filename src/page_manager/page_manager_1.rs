@@ -9,29 +9,29 @@ use memmap2::{MmapMut, MmapOptions};
 
 use super::{
     p_manager::{FHandler, PManager},
-    page::{Page, PageId, PageRef, PAGE_SIZE},
+    page::{PageInner, PageId, PageRef, PAGE_SIZE},
     persistencer::Persistencer,
 };
 
-pub struct PageManager1 {
+pub struct PageManager2 {
     flushing: Arc<Mutex<()>>,
     written_map: DashMap<PageId, Arc<MmapMut>>,
     flush_map: Arc<DashMap<PageId, Arc<MmapMut>>>,
     persistencer: Arc<Persistencer>,
 }
 
-pub struct FlushHandler1 {
+pub struct FlushHandler2 {
     handler: Option<JoinHandle<()>>,
 }
 
-impl FHandler for FlushHandler1 {
+impl FHandler for FlushHandler2 {
     fn join(&mut self) {
         self.handler.take().unwrap().join().unwrap();
     }
 }
 
-impl PManager for PageManager1 {
-    type FlushHandler = FlushHandler1;
+impl PManager for PageManager2 {
+    type FlushHandler = FlushHandler2;
 
     #[inline]
     fn new(root_dir: &str) -> Self {
@@ -43,12 +43,12 @@ impl PManager for PageManager1 {
         Self::init(root_dir, false)
     }
 
-    fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> Page<T, Self>
+    fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
     where
         Self: Sized,
     {
         let mmap = Arc::new(arc_self.persistencer.new_mmap(page_id));
-        Page {
+        PageInner {
             page_id,
             obj: T::load_from(&mmap),
             mmap,
@@ -56,7 +56,7 @@ impl PManager for PageManager1 {
         }
     }
 
-    unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> Page<T, Self>
+    unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
     where
         Self: Sized,
     {
@@ -69,7 +69,7 @@ impl PManager for PageManager1 {
         } else {
             Arc::new(arc_self.persistencer.load_mmap(page_id))
         };
-        Page {
+        PageInner {
             page_id,
             obj: T::load_from(&mmap),
             mmap,
@@ -93,7 +93,7 @@ impl PManager for PageManager1 {
     }
 }
 
-impl PageManager1 {
+impl PageManager2 {
     fn init(root_dir: &str, init: bool) -> Self {
         Self {
             flushing: Arc::new(Mutex::new(())),
@@ -107,7 +107,7 @@ impl PageManager1 {
         }
     }
 
-    fn inner_flush(&self, is_try: bool) -> Option<FlushHandler1> {
+    fn inner_flush(&self, is_try: bool) -> Option<FlushHandler2> {
         let flushing = self.flushing.clone();
         let persistencer = self.persistencer.clone();
         let flush_map = self.flush_map.clone();
@@ -137,13 +137,13 @@ impl PageManager1 {
             persistencer.flush(&flush_map);
             flush_map.clear();
         });
-        Some(FlushHandler1 {
+        Some(FlushHandler2 {
             handler: Some(handler),
         })
     }
 
     #[inline]
-    pub fn try_flush(&self) -> Option<FlushHandler1> {
+    pub fn try_flush(&self) -> Option<FlushHandler2> {
         self.inner_flush(true)
     }
 }

@@ -15,14 +15,14 @@ pub trait PageRef {
     fn load_from(mmap: &MmapMut) -> Self;
 }
 
-pub struct Page<T: PageRef, T1: PManager> {
+pub struct PageInner<T: PageRef, T1: PManager> {
     pub(crate) page_id: PageId,
     pub(crate) obj: T,
     pub(crate) mmap: Arc<MmapMut>,
     pub(crate) pm: Arc<T1>,
 }
 
-impl<T: PageRef, T1: PManager> Page<T, T1> {
+impl<T: PageRef, T1: PManager> PageInner<T, T1> {
     #[inline]
     pub fn read(&self) -> &T {
         &self.obj
@@ -36,7 +36,7 @@ impl<T: PageRef, T1: PManager> Page<T, T1> {
 }
 
 pub struct PageWriteGuard<'a, T: PageRef, T1: PManager> {
-    page: &'a mut Page<T, T1>,
+    page: &'a mut PageInner<T, T1>,
 }
 
 impl<'a, T: PageRef, T1: PManager> Drop for PageWriteGuard<'a, T, T1> {

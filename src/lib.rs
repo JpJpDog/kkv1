@@ -5,12 +5,12 @@
 
 extern crate core;
 
-// mod btree_node;
-// mod btree_store;
+mod btree_node;
+mod btree_util;
 // mod crabbing;
 mod page_manager;
 mod page_system;
-// mod util;
+mod util;
 
 #[cfg(test)]
 mod tests {

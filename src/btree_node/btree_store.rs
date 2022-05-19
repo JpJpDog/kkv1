@@ -3,18 +3,18 @@ use std::{
     hash::Hash,
     mem::MaybeUninit,
     sync::{Arc, RwLock},
-    thread::JoinHandle,
 };
 
 use dashmap::{DashMap, DashSet};
 
-use super::{
-    btree_node::btree_node::{DataNode, InnerNode, NodeCursor},
-    page_manager::page::PageId,
+use crate::{
+    btree_node::btree_node::NodeCursor,
+    btree_util::{lru_cache::LRUCache, meta_page::MetaPage},
+    page_manager::{page::PageId, FlushHandler},
     page_system::page_system::PageSystem,
 };
 
-use super::{lru_cache::LRUCache, meta_page::MetaPage};
+use super::btree_node::{DataNode, InnerNode};
 
 pub struct BTreeConfig {
     pub inner_node_n: usize,
@@ -45,7 +45,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
     pub fn new(root_dir: &str, config: BTreeConfig, min_key: K) -> Self {
         let ps = Arc::new(PageSystem::new(root_dir));
         let mut meta_page: MetaPage<K> = ps.new_page();
-        assert_eq!(meta_page.page_id(), Self::META_PAGE_ID);
+        assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
         let mut data_cache;
         let (root_id, mut root_node) =
@@ -78,7 +78,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
     pub unsafe fn load(root_dir: &str, config: BTreeConfig) -> Self {
         let ps = Arc::new(PageSystem::load(root_dir));
         let meta_page: MetaPage<K> = ps.load_page(Self::META_PAGE_ID);
-        assert_eq!(meta_page.page_id(), Self::META_PAGE_ID);
+        assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
         let data_cache;
 
@@ -171,13 +171,8 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
 
     /// unsafe if any function is called before this function returns
     #[inline]
-    pub fn flush(&self) {
-        self.ps.flush();
-    }
-
-    #[inline]
-    pub async fn flush_async(&self) {
-        self.ps.flush_async().await
+    pub fn flush(&self) -> FlushHandler {
+        self.ps.flush()
     }
 }
 

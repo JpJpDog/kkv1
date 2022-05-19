@@ -1,10 +1,8 @@
-use rand::{prelude::StdRng, Rng, SeedableRng};
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::mem::swap;
-use std::{fmt::Debug, ptr::NonNull};
+use std::{ptr::NonNull, mem::swap, hash::Hash, collections::HashMap, fmt::Debug};
 
-use super::util::KV;
+use rand::{prelude::StdRng, Rng, SeedableRng};
+
+use crate::util::KV;
 
 /// max height of `SkipList`
 const MAX_LAYER: usize = 32;

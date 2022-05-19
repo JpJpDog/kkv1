@@ -2,7 +2,10 @@ use std::ptr::NonNull;
 
 use memmap2::MmapMut;
 
-use super::page_manager::page::{Page, PageId, PageRef};
+use crate::page_manager::{
+    page::{PageId, PageRef},
+    Page,
+};
 
 /// meta data of btree that need to store on disk
 pub struct BTreeMeta<K> {
