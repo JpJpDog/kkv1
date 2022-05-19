@@ -9,7 +9,7 @@ use std::{
 use dashmap::DashMap;
 use memmap2::{MmapMut, MmapOptions};
 
-use crate::page::{PageId, PAGE_SIZE};
+use super::page::{PageId, PAGE_SIZE};
 
 pub const PAGE_PER_FILE: usize = 1024;
 
@@ -70,7 +70,7 @@ impl Persistencer {
             let file = File::options()
                 .read(true)
                 .write(true)
-                .create_new(true)
+                .create(true)
                 .open(file_dir)
                 .unwrap();
             file.set_len((PAGE_SIZE * PAGE_PER_FILE) as u64).unwrap();
@@ -128,7 +128,7 @@ impl Persistencer {
             .open(&log_dir1)
             .unwrap();
         let len = logging.len();
-        let id_n_per_page = PAGE_SIZE.div_floor(size_of::<PageId>());
+        let id_n_per_page = (PAGE_SIZE - size_of::<usize>()).div_floor(size_of::<PageId>());
         let id_page_n =
             (len + size_of::<usize>().div_ceil(size_of::<PageId>())).div_ceil(id_n_per_page);
         let log_len = (id_page_n + len) * PAGE_SIZE;
@@ -144,6 +144,10 @@ impl Persistencer {
             pages[idx].clone_from_slice(e.value());
         }
         mmap.flush_async().unwrap();
+    }
+
+    pub fn finish_log(&self) {
+        let log_dir1 = format!("{}/log/log_", self.root_dir);
         let log_dir = format!("{}/log/log", self.root_dir);
         rename(log_dir1, &log_dir).unwrap();
     }
@@ -153,6 +157,6 @@ impl Persistencer {
             self.save_mmap(*e.key(), e.value());
         }
         let log_dir = format!("{}/log/log", self.root_dir);
-        remove_file(log_dir).unwrap();
+        remove_file(&log_dir).unwrap();
     }
 }

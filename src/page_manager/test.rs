@@ -4,15 +4,20 @@ use std::{
     path::Path,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc,
     },
-    thread::{spawn, JoinHandle},
+    thread,
 };
 
 use memmap2::MmapMut;
 use rand::random;
 
-use crate::page::{Page, PageManager, PageRef};
+use super::{
+    p_manager::{FHandler, PManager},
+    page::PageRef,
+    page_manager::{FlushHandler, PageManager},
+    // page_manager_1::{FlushHandler1 as FlushHandler, PageManager1 as PageManager},
+};
 
 struct TestPageRef {
     a: *mut u32,
@@ -37,66 +42,60 @@ impl PageRef for TestPageRef {
 }
 
 #[test]
-fn test1() {
-    let root_dir = "test_dir/test1";
-    if Path::exists(Path::new(root_dir)) {
-        remove_dir_all(root_dir).unwrap();
+fn pm_simple() {
+    let test_dir = "test_dir/pm1";
+    if Path::exists(Path::new(test_dir)) {
+        remove_dir_all(test_dir).unwrap();
     }
-    let pm = Arc::new(PageManager::new(root_dir));
-    let mut page: Page<TestPageRef> = PageManager::new_page(pm.clone(), 0);
+    let pm = Arc::new(PageManager::new(test_dir));
+    let mut page = PageManager::new_page::<TestPageRef>(pm.clone(), 0);
     *page.write().a_mut() = 1;
-    let h = pm.flush_pages().unwrap();
-    h.join().unwrap();
-
+    let mut handler = pm.flush();
+    handler.join();
     let a = page.read().a();
     assert_eq!(*a, 1);
 
-    let pm = Arc::new(PageManager::load(root_dir));
-    let page: Page<TestPageRef> = unsafe { PageManager::load_page(pm.clone(), 0) };
-    let a = page.read().a();
-    assert_eq!(*a, 1);
-}
-
-fn test11() {
-    let root_dir = "test_dir/test1";
-    let pm = Arc::new(PageManager::load(root_dir));
-    let page: Page<TestPageRef> = unsafe { PageManager::load_page(pm.clone(), 0) };
+    let pm = Arc::new(unsafe { PageManager::load(test_dir) });
+    let page = unsafe { PageManager::load_page::<TestPageRef>(pm.clone(), 0) };
     let a = page.read().a();
     assert_eq!(*a, 1);
 }
+
+// #[test]
+// fn test11() {
+//     let test_dir = "test_dir/pm2";
+//     let pm = Arc::new(PageManager::load(test_dir));
+//     let page: Page<TestPageRef> = unsafe { PageManager::load_page(pm.clone(), 0) };
+// }
 
 #[test]
-fn test2() {
-    let root_dir = "test_dir/test2";
-    if Path::exists(Path::new(root_dir)) {
-        remove_dir_all(root_dir).unwrap();
+fn pm_complicated() {
+    let test_dir = "test_dir/pm2";
+    if Path::exists(Path::new(test_dir)) {
+        remove_dir_all(test_dir).unwrap();
     }
-    let pm = Arc::new(PageManager::new(root_dir));
-    let thread_n = 10;
+    let pm = Arc::new(PageManager::new(test_dir));
+    let thread_n = 4;
     let page_n_per_thread = 2000;
     let mut handlers = Vec::new();
     let cnt = Arc::new(AtomicU64::new(1));
-    let handler: Arc<Mutex<Option<JoinHandle<()>>>> = Arc::new(Mutex::new(None));
     for i in 0..thread_n {
         let start = i * page_n_per_thread;
         let cnt = cnt.clone();
         let pm = pm.clone();
-        let handler = handler.clone();
-        handlers.push(spawn(move || {
+        let h = thread::spawn(move || {
+            let mut guard: Option<FlushHandler> = None;
             for id in start..start + page_n_per_thread {
                 let _page = PageManager::new_page::<TestPageRef>(pm.clone(), id);
             }
             let mut set = HashSet::new();
-            for _j in 0..1000000 {
+            for _j in 0..100000 {
                 let old = cnt.fetch_add(1, Ordering::SeqCst);
-                if old % 10000 == 0 {
-                    let mut h_g = handler.lock().unwrap();
-                    let h = h_g.take();
-                    if let Some(h) = h {
-                        h.join().unwrap();
+                if old % 1000 == 0 {
+                    if let Some(mut f) = guard {
+                        f.join();
                     }
-                    *h_g = pm.flush_pages();
-                    assert!(h_g.is_some());
+                    guard = Some(pm.flush());
                 }
                 let op = random::<u32>() % 10;
                 let id = start + random::<u32>() % page_n_per_thread;
@@ -114,10 +113,13 @@ fn test2() {
                     }
                 }
             }
-        }));
+            if let Some(mut f) = guard {
+                f.join();
+            }
+        });
+        handlers.push(h);
     }
     for h in handlers {
         h.join().unwrap();
     }
-    handler.lock().unwrap().take().unwrap().join().unwrap();
 }
