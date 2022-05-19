@@ -3,6 +3,7 @@ use std::{
     io::Read,
     mem::size_of,
     path::Path,
+    ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
     sync::Arc,
 };
 
@@ -53,19 +54,27 @@ impl Persistencer {
             let (_, slice1) = slice1.split_at(size_of::<usize>());
             let (_preffix, page_ids, _suffix) = unsafe { slice1.align_to::<PageId>() };
             let (pages, _remainder) = slice2.as_chunks::<PAGE_SIZE>();
+            let mut flushes = Vec::new();
             for idx in 0..len {
-                result.save_mmap(page_ids[idx], &pages[idx]);
+                flushes.push((page_ids[idx], unsafe {
+                    &*slice_from_raw_parts::<u8>(pages[idx].as_ptr(), pages.len())
+                }));
             }
+            result.flush_inner(flushes);
             remove_file(log_dir).unwrap();
         }
         result
     }
 
-    fn mmap_loc(&self, page_id: PageId, init: bool) -> (File, usize) {
-        let file_idx = page_id as usize / PAGE_PER_FILE;
+    #[inline]
+    fn get_file_idx(page_id: PageId) -> usize {
+        page_id as usize / PAGE_PER_FILE
+    }
+
+    fn get_file(&self, file_idx: usize, init: bool) -> File {
         let file_dir = format!("{}/store/{}", self.root_dir, file_idx);
         let exist = Path::exists(Path::new(&file_dir));
-        let file = if !exist {
+        if !exist {
             assert!(init);
             let file = File::options()
                 .read(true)
@@ -81,7 +90,12 @@ impl Persistencer {
                 .write(true)
                 .open(file_dir)
                 .unwrap()
-        };
+        }
+    }
+
+    fn mmap_loc(&self, page_id: PageId, init: bool) -> (File, usize) {
+        let file_idx = Self::get_file_idx(page_id);
+        let file = self.get_file(file_idx, init);
         let off = (page_id as usize % PAGE_PER_FILE) * PAGE_SIZE;
         (file, off)
     }
@@ -104,19 +118,6 @@ impl Persistencer {
             .len(PAGE_SIZE)
             .map_copy(&file)
             .unwrap()
-    }
-
-    fn save_mmap(&self, page_id: PageId, content: &[u8]) {
-        let (file, off) = self.mmap_loc(page_id, false);
-        let mut mmap = unsafe {
-            MmapOptions::new()
-                .offset(off as u64)
-                .len(PAGE_SIZE)
-                .map_mut(&file)
-                .unwrap()
-        };
-        mmap.clone_from_slice(content);
-        mmap.flush_async().unwrap();
     }
 
     pub fn log(&self, logging: &DashMap<PageId, Arc<MmapMut>>) {
@@ -152,9 +153,52 @@ impl Persistencer {
         rename(log_dir1, &log_dir).unwrap();
     }
 
-    pub fn flush(&self, flushing: &DashMap<PageId, Arc<MmapMut>>) {
-        for e in flushing.iter() {
-            self.save_mmap(*e.key(), e.value());
+    pub fn flush(&self, flush_map: &DashMap<PageId, Arc<MmapMut>>) {
+        let mut flushes = Vec::new();
+        for e in flush_map.iter() {
+            flushes.push((*e.key(), unsafe {
+                &*(slice_from_raw_parts(e.value().as_ptr(), e.value().len()))
+            }));
+        }
+        self.flush_inner(flushes);
+    }
+
+    fn flush_inner(&self, mut flushes: Vec<(PageId, &[u8])>) {
+        let mut flush_set = Vec::new();
+
+        let mut flush_sets = Vec::new();
+        let mut cur_fid = None;
+        flushes.sort_by(|a, b| a.0.cmp(&b.0));
+        for (page_id, mmap) in flushes {
+            let fid = Self::get_file_idx(page_id);
+            if let Some(cid) = cur_fid {
+                if cid != fid {
+                    flush_sets.push((cid, flush_set));
+                    flush_set = Vec::new();
+                    cur_fid = Some(fid);
+                }
+            } else {
+                cur_fid = Some(fid);
+            }
+            flush_set.push((page_id, mmap));
+        }
+        if let Some(cid) = cur_fid {
+            flush_sets.push((cid, flush_set));
+        }
+        for (file_idx, flush_set) in flush_sets {
+            let file = self.get_file(file_idx, false);
+            for (page_id, content) in flush_set {
+                let off = (page_id as usize % PAGE_PER_FILE) * PAGE_SIZE;
+                let mut mmap = unsafe {
+                    MmapOptions::new()
+                        .offset(off as u64)
+                        .len(PAGE_SIZE)
+                        .map_mut(&file)
+                        .unwrap()
+                };
+                mmap.clone_from_slice(&content);
+                mmap.flush_async().unwrap();
+            }
         }
         let log_dir = format!("{}/log/log", self.root_dir);
         remove_file(&log_dir).unwrap();
