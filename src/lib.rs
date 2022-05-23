@@ -11,6 +11,7 @@ mod crabbing;
 mod page_manager;
 mod page_system;
 mod util;
+mod palm;
 
 #[cfg(test)]
 mod tests {
