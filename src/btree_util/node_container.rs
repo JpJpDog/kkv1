@@ -19,7 +19,7 @@ pub trait NodeContainer<K: PartialOrd + Clone, V: Clone>: Clone {
 }
 
 #[derive(Clone)]
-struct LockNodeContainer<K: PartialOrd + Clone, V: Clone> {
+pub struct LockNodeContainer<K: PartialOrd + Clone, V: Clone> {
     inner: Arc<RwLock<Node<K, V>>>,
 }
 
@@ -47,7 +47,7 @@ impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for LockNodeContainer<
 }
 
 #[derive(Clone)]
-struct RawNodeContainer<K: PartialOrd + Clone, V: Clone> {
+pub struct RawNodeContainer<K: PartialOrd + Clone, V: Clone> {
     inner: Arc<UnsafeCell<Node<K, V>>>,
 }
 

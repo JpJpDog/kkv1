@@ -15,8 +15,6 @@ use rand::{
     random, Rng, SeedableRng,
 };
 
-// use super::util::make_test_dir;
-
 use crate::page_manager::{p_manager::FHandler, FlushHandler};
 
 use super::btree::{BTree, DEFAULT_BTREE_CONFIG};
@@ -179,11 +177,3 @@ fn seq_insert_remove_s() {
     }
 }
 
-// #[test]
-// fn random_insert_remove_s() {
-//     let test_dir = "./test_dir/btree4";
-//     if Path::exists(Path::new(test_dir)) {
-//         remove_dir_all(test_dir).unwrap();
-//     }
-//     let mut rng = StdRng::seed_from_u64(0);
-// }

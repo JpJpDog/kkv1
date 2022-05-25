@@ -7,6 +7,8 @@ use super::{
     skip_list::{SkipList, SkipListCursor},
 };
 
+pub type NodeId = PageId;
+
 /// BTreeNode based on NodePageList with a memory directory implemented in skiplist
 pub struct Node<K: PartialOrd + Clone, V: Clone> {
     pub page_list: NodePageList<K, V>,
