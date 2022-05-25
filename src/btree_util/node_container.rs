@@ -1,4 +1,8 @@
-use std::{ops::{Deref, DerefMut}, sync::{RwLock, Arc, RwLockReadGuard, RwLockWriteGuard}, cell::UnsafeCell};
+use std::{
+    cell::UnsafeCell,
+    ops::{Deref, DerefMut},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use crate::btree_node::btree_node::Node;
 
@@ -74,3 +78,7 @@ impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for RawNodeContainer<K
         unsafe { &mut *self.inner.get() }
     }
 }
+
+unsafe impl<K: PartialOrd + Clone, V: Clone> Send for RawNodeContainer<K, V> {}
+
+unsafe impl<K: PartialOrd + Clone, V: Clone> Sync for RawNodeContainer<K, V> {}

@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLockWriteGuard};
 use crate::{
     btree_node::btree_node::{DataNode, InnerNode, Node, NodeId},
     btree_util::{
-        btree_store::{BTreeStore, DEFAULT_BTREE_STORE_CONFIG},
+        btree_store::{BTreeStore, DEFAULT_BTREE_STORE_CONFIG, LockBTreeStore},
         meta_page::MetaPage,
         node_container::{LockNodeContainer, NodeContainer},
     },
@@ -33,8 +33,6 @@ enum RemoveRtn<K> {
     Remove { key: K },
     ChangeKey { old: K, key: K },
 }
-
-type LockBTreeStore<K, V> = BTreeStore<K, V, LockNodeContainer<K, NodeId>, LockNodeContainer<K, V>>;
 
 pub struct BTree<K: Clone + PartialOrd, V: Clone> {
     pub store: Arc<LockBTreeStore<K, V>>,

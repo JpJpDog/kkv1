@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crossbeam::{
     channel::{Receiver, Sender},
@@ -6,7 +6,7 @@ use crossbeam::{
 };
 
 use crate::{
-    btree_node::{btree_node::{InnerNode, DataNode}, btree_store::BTreeStore},
+    btree_util::{btree_store::RawBTreeStore, node_container::NodeContainer},
     page_manager::page::PageId,
 };
 
@@ -16,7 +16,7 @@ use super::palm_msg::{
 };
 
 pub struct PALMWorker<K: Clone + Ord, V: Clone> {
-    store: Arc<BTreeStore<K, V>>,
+    store: Arc<RawBTreeStore<K, V>>,
     find_req_rx: Receiver<FindReqs<K>>,
     find_rsp_tx: Sender<FindRsps>,
     data_req_rx: Receiver<DataReqs<K, V>>,
@@ -28,7 +28,7 @@ pub struct PALMWorker<K: Clone + Ord, V: Clone> {
 
 impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
     pub fn new(
-        store: Arc<BTreeStore<K, V>>,
+        store: Arc<RawBTreeStore<K, V>>,
         find_req_rx: Receiver<FindReqs<K>>,
         find_rsp_tx: Sender<FindRsps>,
         data_req_rx: Receiver<DataReqs<K, V>>,
@@ -90,9 +90,8 @@ impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
             let mut k1 = 0;
             for (id, req_n) in page_ids.iter() {
                 let inner = self.store.load_inner(*id).unwrap();
-                let inner_g = inner.try_read().unwrap();
                 for j in k1..k1 + req_n {
-                    let id = inner_g.get(&keys[j]).unwrap().val;
+                    let id = inner.read().get(&keys[j]).unwrap().val;
                     if let Some((last_id, n)) = page_ids1.last_mut() {
                         if *last_id == id {
                             *n += 1;
@@ -120,44 +119,37 @@ impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
         let mut results = Vec::new();
         let mut inner_cmds = Vec::new();
         for req in reqs.iter() {
-            let datas = vec![self.store.load_data(req.page_id).unwrap()];
-            let mut data_gs = vec![datas[0].try_write().unwrap()];
+            let mut datas = vec![self.store.load_data(req.page_id).unwrap()];
             let mut data_ids = vec![(req.page_id, 0)];
             let cmds = unsafe { req.cmds.as_ref() };
             for cmd in cmds {
                 let mut data_idx = 1;
-                while data_idx < data_gs.len() {
-                    if &data_gs[data_idx].first().unwrap().key > cmd.key() {
+                while data_idx < datas.len() {
+                    if &datas[data_idx].read().first().unwrap().key > cmd.key() {
                         break;
                     }
                     data_idx += 1;
                 }
-                let data_g = &mut data_gs[data_idx - 1];
+                let mut data = datas[data_idx - 1].clone();
                 let res = match cmd {
                     PALMCmd::Insert { key, val } => {
                         let val = unsafe { val.as_ref() };
-                        if !data_g.insert(key, val) {
-                            let (rid, right) = self.store.new_data();
+                        if !data.write().insert(key, val) {
+                            let (rid, mut right) = self.store.new_data();
                             data_ids.insert(data_idx, (rid, off));
-                            // safe because `data_gs` owns RwLockWriteGuard that refers to RwLock 'inside' Arc, which will not change when Vec is inserted a new elem
-                            unsafe {
-                                &mut *(&datas as *const _ as *mut Vec<Arc<RwLock<DataNode<K, V>>>>)
-                            }
-                            .insert(data_idx, right);
-                            let mut right_g = datas[data_idx].try_write().unwrap();
-                            data_g.split_to(&mut right_g, None);
+                            data.write().split_to(right.write(), None);
                             // insert the new kv
-                            if &right_g.first().unwrap().key > key {
-                                data_g.insert(key, val);
+                            if &right.read().first().unwrap().key > key {
+                                data.write().insert(key, val);
                             } else {
-                                right_g.insert(key, val);
+                                right.write().insert(key, val);
                             }
-                            data_gs.insert(data_idx, right_g);
+                            datas.insert(data_idx, right);
                         }
                         PALMResult::Insert
                     }
                     PALMCmd::Get { key, mut dest } => {
-                        let kv = data_g.get(key);
+                        let kv = data.read().get(key);
                         if let Some(kv) = kv {
                             if &kv.key == key {
                                 unsafe { *dest.as_mut() = kv.val.clone() };
@@ -174,8 +166,8 @@ impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
                 results.push(res);
                 off += 1;
             }
-            for i in 1..data_gs.len() {
-                let key = data_gs[i].first().unwrap().key.clone();
+            for i in 1..datas.len() {
+                let key = datas[i].read().first().unwrap().key.clone();
                 let (id, idx) = data_ids[i];
                 inner_cmds.push((InnerCmd::Insert { key, id }, idx));
             }
@@ -184,47 +176,38 @@ impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
     }
 
     fn inner_op(&self, reqs: &[InnerReq<K>]) -> Vec<(InnerCmd<K>, usize)> {
-        // let mut cnt = 0;
-        // reqs.iter().for_each(|e| cnt += e.cmds.len());
-        // println!("inner {}", cnt);
         let mut inner_cmds = Vec::new();
         for req in reqs {
-            let inners = vec![self.store.load_inner(req.page_id).unwrap()];
-            let mut inner_gs = vec![inners[0].try_write().unwrap()];
+            let mut inners = vec![self.store.load_inner(req.page_id).unwrap()];
             let mut inner_ids = vec![(req.page_id, 0)];
             for (cmd, idx) in req.cmds.iter() {
                 let mut inner_idx = 1;
-                while inner_idx < inner_gs.len() {
-                    if &inner_gs[inner_idx].first().unwrap().key > cmd.key() {
+                while inner_idx < inners.len() {
+                    if &inners[inner_idx].read().first().unwrap().key > cmd.key() {
                         break;
                     }
                     inner_idx += 1;
                 }
-                let inner_g = &mut inner_gs[inner_idx - 1];
+                let mut inner = inners[inner_idx - 1].clone();
                 match cmd {
                     InnerCmd::Insert { key, id } => {
-                        if !inner_g.insert(key, id) {
-                            let (rid, right) = self.store.new_inner();
+                        if !inner.write().insert(key, id) {
+                            let (rid, mut right) = self.store.new_inner();
                             inner_ids.insert(inner_idx, (rid, *idx));
-                            unsafe {
-                                &mut *(&inners as *const _ as *mut Vec<Arc<RwLock<InnerNode<K>>>>)
-                            }
-                            .insert(inner_idx, right);
-                            let mut right_g = inners[inner_idx].try_write().unwrap();
-                            inner_g.split_to(&mut right_g, None);
+                            inner.write().split_to(right.write(), None);
                             // insert new kv
-                            if &right_g.first().unwrap().key > key {
-                                inner_g.insert(key, id);
+                            if &right.read().first().unwrap().key > key {
+                                inner.write().insert(key, id);
                             } else {
-                                right_g.insert(key, id);
+                                right.write().insert(key, id);
                             }
-                            inner_gs.insert(inner_idx, right_g);
+                            inners.insert(inner_idx, right);
                         }
                     }
-                    InnerCmd::Remove { key } => todo!(),
+                    InnerCmd::Remove { key: _ } => todo!(),
                 }
-                for i in 1..inner_gs.len() {
-                    let key = inner_gs[i].first().unwrap().key.clone();
+                for i in 1..inners.len() {
+                    let key = inners[i].read().first().unwrap().key.clone();
                     let id = inner_ids[i].0;
                     inner_cmds.push((InnerCmd::Insert { key, id }, inner_ids[i].1));
                 }

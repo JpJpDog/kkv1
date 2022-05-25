@@ -9,13 +9,13 @@ use std::{
 use dashmap::{DashMap, DashSet};
 
 use crate::{
-    btree_node::btree_node::{DataNode, InnerNode, NodeCursor},
+    btree_node::btree_node::{DataNode, InnerNode, NodeCursor, NodeId},
     btree_util::{lru_cache::LRUCache, meta_page::MetaPage},
     page_manager::{page::PageId, FlushHandler},
     page_system::page_system::PageSystem,
 };
 
-use super::node_container::NodeContainer;
+use super::node_container::{LockNodeContainer, NodeContainer, RawNodeContainer};
 
 pub struct BTreeConfig {
     pub inner_node_n: usize,
@@ -332,3 +332,9 @@ impl<
         assert_eq!(next_node_id.unwrap(), PageId::MAX);
     }
 }
+
+pub type RawBTreeStore<K, V> =
+    BTreeStore<K, V, RawNodeContainer<K, NodeId>, RawNodeContainer<K, V>>;
+
+pub type LockBTreeStore<K, V> =
+    BTreeStore<K, V, LockNodeContainer<K, NodeId>, LockNodeContainer<K, V>>;

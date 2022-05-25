@@ -1,4 +1,5 @@
-use crate::btree_node::btree_store::{BTreeStore, DEFAULT_BTREE_STORE_CONFIG};
+use crate::btree_util::btree_store::{BTreeStore, RawBTreeStore, DEFAULT_BTREE_STORE_CONFIG};
+use crate::btree_util::node_container::NodeContainer;
 use crate::page_manager::page::PageId;
 use crate::page_manager::FlushHandler;
 use crate::palm::palm_msg::{DataReq, InnerReq};
@@ -31,7 +32,8 @@ pub const DEFAULT_PALM_CONFIG: PALMConfig = PALMConfig {
 
 ////////////////////////////////////////////////////////////
 
-pub struct PALMTree<K: 'static + Send + Sync + PartialOrd + Clone, V: 'static + Clone> {
+pub struct PALMTree<K: 'static + Ord + Send + Sync + Clone, V: 'static + Clone + Send + Sync>
+{
     config: PALMConfig,
     find_req_txs: Vec<Sender<FindReqs<K>>>,
     find_rsp_rx: Receiver<FindRsps>,
@@ -41,10 +43,12 @@ pub struct PALMTree<K: 'static + Send + Sync + PartialOrd + Clone, V: 'static + 
     inner_rsp_rx: Receiver<InnerRsps<K>>,
     handlers: Vec<JoinHandle<()>>,
     end_txs: Vec<Sender<()>>,
-    pub store: Arc<BTreeStore<K, V>>,
+    pub store: Arc<RawBTreeStore<K, V>>,
 }
 
-impl<K: 'static + Ord + Send + Clone + Sync, V: 'static + Clone> PALMTree<K, V> {
+impl<K: 'static + Ord + Send + Sync + Clone, V: 'static + Clone + Send + Sync>
+    PALMTree<K, V>
+{
     pub fn new(root_dir: &str, min_key: K, config: PALMConfig) -> Self {
         let mut store_config = DEFAULT_BTREE_STORE_CONFIG;
         store_config.node_cap = config.node_cap;
@@ -59,7 +63,7 @@ impl<K: 'static + Ord + Send + Clone + Sync, V: 'static + Clone> PALMTree<K, V> 
         Self::new_with_store(store, config)
     }
 
-    fn new_with_store(store: Arc<BTreeStore<K, V>>, config: PALMConfig) -> Self {
+    fn new_with_store(store: Arc<RawBTreeStore<K, V>>, config: PALMConfig) -> Self {
         let mut handlers = Vec::new();
         let mut find_req_txs = Vec::new();
         let (find_rsp_tx, find_rsp_rx) = unbounded();
@@ -306,7 +310,7 @@ impl<K: 'static + Ord + Send + Clone + Sync, V: 'static + Clone> PALMTree<K, V> 
         }
         while !inners.is_empty() {
             // new inner node
-            let (new_id, new_inner) = self.store.new_inner();
+            let (new_id, mut new_inner) = self.store.new_inner();
             {
                 let mut meta_g = self.store.meta.try_write().unwrap();
                 let mut meta = meta_g.write();
@@ -314,8 +318,7 @@ impl<K: 'static + Ord + Send + Clone + Sync, V: 'static + Clone> PALMTree<K, V> 
                 meta.meta_mut().depth += 1;
                 meta.meta_mut().root = new_id;
                 let min_key = &meta.meta().min_key;
-                let mut inner_g = new_inner.try_write().unwrap();
-                assert!(inner_g.insert(min_key, &old_id));
+                assert!(new_inner.write().insert(min_key, &old_id));
             }
             // make inner reqs to new node
             let mut inner_req = vec![InnerReq {
@@ -334,12 +337,14 @@ impl<K: 'static + Ord + Send + Clone + Sync, V: 'static + Clone> PALMTree<K, V> 
     }
 
     pub fn flush(&mut self) -> FlushHandler {
-        self.store.update_data_cache();
+        self.store.update_cache();
         self.store.flush()
     }
 }
 
-impl<K: 'static + Send + Sync + PartialOrd + Clone, V: 'static + Clone> Drop for PALMTree<K, V> {
+impl<K: 'static + Ord + Send + Sync + Clone, V: 'static + Clone + Send + Sync> Drop
+    for PALMTree<K, V>
+{
     fn drop(&mut self) {
         for end_tx in self.end_txs.iter() {
             end_tx.send(()).unwrap();

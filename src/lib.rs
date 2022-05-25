@@ -11,7 +11,7 @@ mod btree_util;
 mod crabbing;
 mod page_manager;
 mod page_system;
-// mod palm;
+mod palm;
 mod util;
 
 #[cfg(test)]
