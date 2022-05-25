@@ -4,9 +4,9 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
-use crate::btree_node::btree_node::Node;
+use crate::btree_node::Node;
 
-pub trait NodeContainer<K: PartialOrd + Clone, V: Clone>: Clone {
+pub trait NodeContainer<K: PartialOrd + Clone, V: Clone>: Clone + Default {
     type NodeReadGuard<'a>: Deref<Target = Node<K, V>>
     where
         Self: 'a;
@@ -17,14 +17,22 @@ pub trait NodeContainer<K: PartialOrd + Clone, V: Clone>: Clone {
 
     fn new(node: Node<K, V>) -> Self;
 
-    fn read<'a>(&'a self) -> Self::NodeReadGuard<'a>;
+    fn read(&self) -> Self::NodeReadGuard<'_>;
 
-    fn write<'a>(&'a mut self) -> Self::NodeWriteGuard<'a>;
+    fn write(&mut self) -> Self::NodeWriteGuard<'_>;
 }
 
 #[derive(Clone)]
 pub struct LockNodeContainer<K: PartialOrd + Clone, V: Clone> {
     inner: Arc<RwLock<Node<K, V>>>,
+}
+
+impl<K: PartialOrd + Clone, V: Clone> Default for LockNodeContainer<K, V> {
+    fn default() -> Self {
+        Self {
+            inner: unsafe { Arc::from_raw(std::ptr::null()) },
+        }
+    }
 }
 
 impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for LockNodeContainer<K, V> {
@@ -40,12 +48,12 @@ impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for LockNodeContainer<
     }
 
     #[inline]
-    fn read<'a>(&'a self) -> Self::NodeReadGuard<'a> {
+    fn read(&self) -> Self::NodeReadGuard<'_> {
         self.inner.read().unwrap()
     }
 
     #[inline]
-    fn write<'a>(&'a mut self) -> Self::NodeWriteGuard<'a> {
+    fn write(&mut self) -> Self::NodeWriteGuard<'_> {
         self.inner.write().unwrap()
     }
 }
@@ -53,6 +61,14 @@ impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for LockNodeContainer<
 #[derive(Clone)]
 pub struct RawNodeContainer<K: PartialOrd + Clone, V: Clone> {
     inner: Arc<UnsafeCell<Node<K, V>>>,
+}
+
+impl<K: PartialOrd + Clone, V: Clone> Default for RawNodeContainer<K, V> {
+    fn default() -> Self {
+        Self {
+            inner: unsafe { Arc::from_raw(std::ptr::null()) },
+        }
+    }
 }
 
 impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for RawNodeContainer<K, V> {
@@ -70,11 +86,11 @@ impl<K: PartialOrd + Clone, V: Clone> NodeContainer<K, V> for RawNodeContainer<K
         }
     }
 
-    fn read<'a>(&'a self) -> Self::NodeReadGuard<'a> {
+    fn read(&self) -> Self::NodeReadGuard<'_> {
         unsafe { &*self.inner.get() }
     }
 
-    fn write<'a>(&'a mut self) -> Self::NodeWriteGuard<'a> {
+    fn write(&mut self) -> Self::NodeWriteGuard<'_> {
         unsafe { &mut *self.inner.get() }
     }
 }

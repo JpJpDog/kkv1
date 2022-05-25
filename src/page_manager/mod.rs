@@ -1,11 +1,11 @@
 use self::{
     page::PageInner,
-    page_manager::{FlushHandler1, PageManager1},
+    page_manager_2::{FlushHandler1, PageManager1},
 };
 
 pub mod p_manager;
 pub mod page;
-mod page_manager;
+mod page_manager_2;
 mod page_manager_1;
 mod persistencer;
 

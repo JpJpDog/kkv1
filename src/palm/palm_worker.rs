@@ -26,7 +26,7 @@ pub struct PALMWorker<K: Clone + Ord, V: Clone> {
     end_rx: Receiver<()>,
 }
 
-impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
+impl<K: Clone + Ord + Default, V: Clone + Default> PALMWorker<K, V> {
     pub fn new(
         store: Arc<RawBTreeStore<K, V>>,
         find_req_rx: Receiver<FindReqs<K>>,
@@ -90,8 +90,8 @@ impl<K: Clone + Ord, V: Clone> PALMWorker<K, V> {
             let mut k1 = 0;
             for (id, req_n) in page_ids.iter() {
                 let inner = self.store.load_inner(*id).unwrap();
-                for j in k1..k1 + req_n {
-                    let id = inner.read().get(&keys[j]).unwrap().val;
+                for key in keys.iter().skip(k1).take(*req_n) {
+                    let id = inner.read().get(key).unwrap().val;
                     if let Some((last_id, n)) = page_ids1.last_mut() {
                         if *last_id == id {
                             *n += 1;

@@ -28,7 +28,7 @@ pub enum PALMCmd<K, V> {
 impl<K, V> PALMCmd<K, V> {
     pub fn key(&self) -> &K {
         match self {
-            PALMCmd::Insert { key, val: _ } => &key,
+            PALMCmd::Insert { key, val: _ } => key,
             PALMCmd::Get { key, dest: _ } => key,
             PALMCmd::Remove { key } => key,
         }

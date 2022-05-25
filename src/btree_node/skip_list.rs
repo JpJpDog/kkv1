@@ -1,4 +1,4 @@
-use std::{ptr::NonNull, mem::swap, hash::Hash, collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::swap, ptr::NonNull};
 
 use rand::{prelude::StdRng, Rng, SeedableRng};
 
@@ -228,24 +228,22 @@ impl<K: PartialOrd, V: Clone> SkipList<K, V> {
             }
             // update max_layer and add prev_vec from front
             if layer > self.max_layer {
-                for l in self.max_layer..layer {
+                for a in prev_vec.iter_mut().take(layer).skip(self.max_layer) {
                     // dist from null to itself is 0
-                    prev_vec[l] = (self.head, 0);
+                    *a = (self.head, 0);
                 }
                 self.max_layer = layer;
             }
             // set next of new_node and prev node.
-            for l in 0..layer {
+            for (l, (mut p, d)) in prev_vec.iter().enumerate().take(layer) {
                 // d is the dist from null to p's owner, d1 is the dist from p's owner to old next node
-                let (mut p, d) = prev_vec[l];
                 // set next_node's next
                 new_node.next[l] = p.as_ref().next[l].map(|(next, d1)| (next, d + d1 + 1 - dist));
                 // update prev's next
                 p.as_mut().next[l] = Some((new_p, dist - d));
             }
             // set the prev node in layer l's next distance if next exists
-            for l in layer..self.max_layer {
-                let (mut p, _d) = prev_vec[l];
+            for (l, (mut p, _d)) in prev_vec.iter().enumerate().take(self.max_layer).skip(layer) {
                 if let Some((_n, d)) = &mut p.as_mut().next[l] {
                     *d += 1;
                 } else {

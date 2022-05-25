@@ -10,7 +10,7 @@ use crate::{
         page::{PageId, PageRef},
         Page,
     },
-    page_system::page_system::PageSystem,
+    page_system::PageSystem,
     util::KV,
 };
 
@@ -214,7 +214,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
         }
         id -= self.first_cap;
         let idx = id / self.others_cap.unwrap();
-        id = id % self.others_cap.unwrap();
+        id %= self.others_cap.unwrap();
         &self.others[idx as usize].read().blocks()[id as usize]
     }
 
@@ -226,7 +226,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
         } else {
             id -= self.first_cap;
             let idx = id / self.others_cap.unwrap();
-            id = id % self.others_cap.unwrap();
+            id %= self.others_cap.unwrap();
             self.others[idx as usize].write().blocks_mut()[id as usize].next = next;
         };
     }
@@ -238,7 +238,7 @@ impl<K: Clone, V: Clone> NodePageList<K, V> {
         } else {
             id -= self.first_cap;
             let idx = id / self.others_cap.unwrap();
-            id = id % self.others_cap.unwrap();
+            id %= self.others_cap.unwrap();
             self.others[idx as usize].write().blocks_mut()[id as usize].kv =
                 KV::new(key.clone(), val.clone());
         };

@@ -10,3 +10,12 @@ impl<K, V> KV<K, V> {
         Self { key, val }
     }
 }
+
+impl<K: Default, V: Default> Default for KV<K, V> {
+    fn default() -> Self {
+        Self {
+            key: Default::default(),
+            val: Default::default(),
+        }
+    }
+}

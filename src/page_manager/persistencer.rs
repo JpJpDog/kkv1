@@ -3,7 +3,7 @@ use std::{
     io::Read,
     mem::size_of,
     path::Path,
-    ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
+    ptr::slice_from_raw_parts,
     sync::Arc,
 };
 
@@ -196,7 +196,7 @@ impl Persistencer {
                         .map_mut(&file)
                         .unwrap()
                 };
-                mmap.clone_from_slice(&content);
+                mmap.clone_from_slice(content);
                 mmap.flush_async().unwrap();
             }
         }

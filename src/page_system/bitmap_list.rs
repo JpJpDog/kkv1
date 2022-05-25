@@ -16,10 +16,9 @@ impl BitMapList {
     /// unsafe if `boot_id` is in use
     pub unsafe fn new(boot_id: PageId, pm: Arc<PageManager>) -> Self {
         let mut bms = Vec::new();
-        let cap;
         let mut bm = BitMap::new(boot_id, pm.clone());
         assert_eq!(bm.mark().unwrap() as PageId, boot_id);
-        cap = bm.capacity();
+        let cap = bm.capacity();
         bms.push(bm);
         Self { cap, bms, pm }
     }
@@ -28,9 +27,8 @@ impl BitMapList {
     /// unsafe if `boot_id` is wrong
     pub unsafe fn load(boot_id: PageId, pm: Arc<PageManager>) -> Self {
         let mut bms = Vec::new();
-        let cap;
         let mut bm = BitMap::load(boot_id, pm.clone());
-        cap = bm.capacity();
+        let cap = bm.capacity();
         let mut len = bm.len();
         bms.push(bm);
         let mut idx = 0;

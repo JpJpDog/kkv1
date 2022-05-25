@@ -15,7 +15,7 @@ use rand::random;
 use super::{
     p_manager::{FHandler, PManager},
     page::PageRef,
-    page_manager::{FlushHandler1, PageManager1},
+    page_manager_2::{FlushHandler1, PageManager1},
     // page_manager_1::{FlushHandler1 as FlushHandler, PageManager1 as PageManager},
 };
 

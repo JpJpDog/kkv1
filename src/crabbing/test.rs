@@ -17,7 +17,7 @@ use rand::{
 
 use crate::page_manager::{p_manager::FHandler, FlushHandler};
 
-use super::btree::{BTree, DEFAULT_BTREE_CONFIG};
+use super::{BTree, DEFAULT_BTREE_CONFIG};
 
 #[test]
 fn test_random_insert_s() {
@@ -176,4 +176,3 @@ fn seq_insert_remove_s() {
         h.join();
     }
 }
-

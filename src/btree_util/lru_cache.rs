@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, mem::MaybeUninit, ptr::NonNull};
+use std::{collections::HashMap, hash::Hash, ptr::NonNull};
 
 use crate::util::KV;
 
@@ -14,10 +14,10 @@ struct CacheList<K, V> {
     len: usize,
 }
 
-impl<K, V> CacheList<K, V> {
+impl<K: Default, V: Default> CacheList<K, V> {
     fn new() -> Self {
         let head = Box::new(CacheNode {
-            kv: unsafe { MaybeUninit::uninit().assume_init() },
+            kv: KV::default(),
             next: None,
             prev: NonNull::dangling(),
         });
@@ -116,7 +116,7 @@ unsafe impl<K: Eq + Hash + Clone, V: Clone> Send for LRUCache<K, V> {}
 
 unsafe impl<K: Eq + Hash + Clone, V: Clone> Sync for LRUCache<K, V> {}
 
-impl<K: Eq + Hash + Clone, V: Clone> LRUCache<K, V> {
+impl<K: Eq + Hash + Clone + Default, V: Clone + Default> LRUCache<K, V> {
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
@@ -147,7 +147,7 @@ impl<K: Eq + Hash + Clone, V: Clone> LRUCache<K, V> {
 
     pub fn delete(&mut self, key: &K) -> bool {
         unsafe {
-            if let Some(node) = self.map.remove(&key) {
+            if let Some(node) = self.map.remove(key) {
                 self.list.remove_at(node);
                 true
             } else {
@@ -168,7 +168,7 @@ impl<K: Eq + Hash + Clone, V: Clone> LRUCache<K, V> {
 
     pub fn get(&self, key: &K) -> Option<V> {
         self.map
-            .get(&key)
+            .get(key)
             .map(|node| unsafe { node.as_ref().kv.val.clone() })
     }
 }

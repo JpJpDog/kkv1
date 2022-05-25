@@ -29,7 +29,7 @@ impl<T: PageRef, T1: PManager> PageInner<T, T1> {
     }
 
     #[inline]
-    pub fn write<'a>(&'a mut self) -> PageWriteGuard<'a, T, T1> {
+    pub fn write(&mut self) -> PageWriteGuard<'_, T, T1> {
         self.pm.write_start(self.page_id);
         PageWriteGuard { page: self }
     }

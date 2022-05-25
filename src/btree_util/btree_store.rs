@@ -2,17 +2,16 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
-    mem::MaybeUninit,
     sync::{Arc, RwLock},
 };
 
 use dashmap::{DashMap, DashSet};
 
 use crate::{
-    btree_node::btree_node::{DataNode, InnerNode, NodeCursor, NodeId},
+    btree_node::{DataNode, InnerNode, NodeCursor, NodeId},
     btree_util::{lru_cache::LRUCache, meta_page::MetaPage},
     page_manager::{page::PageId, FlushHandler},
-    page_system::page_system::PageSystem,
+    page_system::PageSystem,
 };
 
 use super::node_container::{LockNodeContainer, NodeContainer, RawNodeContainer};
@@ -45,19 +44,21 @@ pub struct BTreeStore<
     _p: PhantomData<V>,
 }
 
-impl<K: Clone + PartialOrd, V: Clone, IC: NodeContainer<K, PageId>, DC: NodeContainer<K, V>>
-    BTreeStore<K, V, IC, DC>
+impl<
+        K: Clone + PartialOrd + Default,
+        V: Clone + Default + Default,
+        IC: NodeContainer<K, PageId>,
+        DC: NodeContainer<K, V>,
+    > BTreeStore<K, V, IC, DC>
 {
-    const META_PAGE_ID: PageId = 1;
-
     pub fn new(root_dir: &str, config: BTreeConfig, min_key: K) -> Self {
         let ps = Arc::new(PageSystem::new(root_dir));
         let mut meta_page: MetaPage<K> = ps.new_page();
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
         let (root_id, mut root_node) =
-            DataNode::<K, V>::new(&ps.clone(), config.data_node_n, config.node_cap);
-        let val = unsafe { MaybeUninit::uninit().assume_init() };
+            DataNode::<K, V>::new(&ps, config.data_node_n, config.node_cap);
+        let val = V::default();
         root_node.insert(&min_key, &val);
         {
             let mut meta_g = meta_page.write();
@@ -82,15 +83,23 @@ impl<K: Clone + PartialOrd, V: Clone, IC: NodeContainer<K, PageId>, DC: NodeCont
             _p: PhantomData,
         }
     }
+}
+
+impl<
+        K: Clone + PartialOrd + Default,
+        V: Clone + Default,
+        IC: NodeContainer<K, PageId>,
+        DC: NodeContainer<K, V>,
+    > BTreeStore<K, V, IC, DC>
+{
+    const META_PAGE_ID: PageId = 1;
 
     pub unsafe fn load(root_dir: &str, config: BTreeConfig) -> Self {
         let ps = Arc::new(PageSystem::load(root_dir));
         let meta_page: MetaPage<K> = ps.load_page(Self::META_PAGE_ID);
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
-        let data_cache;
-
-        data_cache = LRUCache::new(config.data_cache_n);
+        let data_cache = LRUCache::new(config.data_cache_n);
         Self {
             config,
             ps,
@@ -128,7 +137,7 @@ impl<K: Clone + PartialOrd, V: Clone, IC: NodeContainer<K, PageId>, DC: NodeCont
         }
         if let Some(data) = self.data_cache.read().unwrap().get(&page_id) {
             self.updates.insert(page_id);
-            return Some(data.clone());
+            return Some(data);
         }
         let data = unsafe {
             DataNode::<K, V>::load(
@@ -185,8 +194,8 @@ impl<K: Clone + PartialOrd, V: Clone, IC: NodeContainer<K, PageId>, DC: NodeCont
 }
 
 impl<
-        K: Copy + PartialOrd + Eq + Hash + Debug,
-        V: Clone,
+        K: Copy + PartialOrd + Eq + Hash + Debug + Default,
+        V: Clone + Default,
         IC: NodeContainer<K, PageId>,
         DC: NodeContainer<K, V>,
     > BTreeStore<K, V, IC, DC>

@@ -15,7 +15,7 @@ use memmap2::{MmapMut, MmapOptions};
 
 use super::{
     p_manager::{FHandler, PManager},
-    page::{PageInner, PageId, PageRef, PAGE_SIZE},
+    page::{PageId, PageInner, PageRef, PAGE_SIZE},
     persistencer::Persistencer,
 };
 
@@ -75,27 +75,24 @@ impl PManager for PageManager1 {
         let mmap = if let Some(page) = (&*arc_self.written_map.load(Ordering::SeqCst)).get(&page_id)
         {
             page.value().clone()
+        } else if let Some(page) = if let Some(page) =
+            (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
+        {
+            Some(page)
+        } else if let Some(page) = (&*arc_self.logging_map.load(Ordering::SeqCst)).get(&page_id) {
+            Some(page)
+        } else if let Some(page) = (&*arc_self.log_map.load(Ordering::SeqCst)).get(&page_id) {
+            Some(page)
+        } else if let Some(page) = (&*arc_self.flush_map.load(Ordering::SeqCst)).get(&page_id) {
+            Some(page)
         } else {
-            if let Some(page) = if let Some(page) =
-                (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
-            {
-                Some(page)
-            } else if let Some(page) = (&*arc_self.logging_map.load(Ordering::SeqCst)).get(&page_id)
-            {
-                Some(page)
-            } else if let Some(page) = (&*arc_self.log_map.load(Ordering::SeqCst)).get(&page_id) {
-                Some(page)
-            } else if let Some(page) = (&*arc_self.flush_map.load(Ordering::SeqCst)).get(&page_id) {
-                Some(page)
-            } else {
-                None
-            } {
-                let mut mmap = MmapOptions::new().len(PAGE_SIZE).map_anon().unwrap();
-                mmap.clone_from_slice(page.value());
-                Arc::new(mmap)
-            } else {
-                Arc::new(arc_self.persistencer.load_mmap(page_id))
-            }
+            None
+        } {
+            let mut mmap = MmapOptions::new().len(PAGE_SIZE).map_anon().unwrap();
+            mmap.clone_from_slice(page.value());
+            Arc::new(mmap)
+        } else {
+            Arc::new(arc_self.persistencer.load_mmap(page_id))
         };
         PageInner {
             page_id,

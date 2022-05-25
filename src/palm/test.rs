@@ -6,7 +6,7 @@ use std::fs::remove_dir_all;
 use std::path::Path;
 use std::ptr::NonNull;
 
-use super::palm::{PALMTree, DEFAULT_PALM_CONFIG};
+use super::{PALMTree, DEFAULT_PALM_CONFIG};
 use super::palm_msg::PALMResult;
 use crate::page_manager::p_manager::FHandler;
 use crate::page_manager::FlushHandler;
