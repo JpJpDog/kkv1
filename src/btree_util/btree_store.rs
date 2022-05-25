@@ -1,6 +1,7 @@
 use std::{
     fmt::Debug,
     hash::Hash,
+    marker::PhantomData,
     mem::MaybeUninit,
     sync::{Arc, RwLock},
 };
@@ -8,13 +9,13 @@ use std::{
 use dashmap::{DashMap, DashSet};
 
 use crate::{
-    btree_node::btree_node::NodeCursor,
+    btree_node::btree_node::{DataNode, InnerNode, Node, NodeCursor},
     btree_util::{lru_cache::LRUCache, meta_page::MetaPage},
     page_manager::{page::PageId, FlushHandler},
     page_system::page_system::PageSystem,
 };
 
-use super::btree_node::{DataNode, InnerNode};
+use super::node_container::NodeContainer;
 
 pub struct BTreeConfig {
     pub inner_node_n: usize,
@@ -22,7 +23,6 @@ pub struct BTreeConfig {
     pub data_cache_n: usize,
     pub node_cap: usize,
 }
-
 pub const DEFAULT_BTREE_STORE_CONFIG: BTreeConfig = BTreeConfig {
     inner_node_n: 1,
     data_node_n: 1,
@@ -30,16 +30,24 @@ pub const DEFAULT_BTREE_STORE_CONFIG: BTreeConfig = BTreeConfig {
     node_cap: 0,
 };
 
-pub struct BTreeStore<K: Clone + PartialOrd, V: Clone> {
+pub struct BTreeStore<
+    K: Clone + PartialOrd,
+    V: Clone,
+    IC: NodeContainer<K, PageId>,
+    DC: NodeContainer<K, V>,
+> {
     pub meta: RwLock<MetaPage<K>>,
     config: BTreeConfig,
     ps: Arc<PageSystem>,
-    inner_cache: DashMap<PageId, Arc<RwLock<InnerNode<K>>>>,
-    data_cache: RwLock<LRUCache<PageId, Arc<RwLock<DataNode<K, V>>>>>,
+    inner_cache: DashMap<PageId, IC>,
+    data_cache: RwLock<LRUCache<PageId, DC>>,
     updates: DashSet<PageId>,
+    _p: PhantomData<V>,
 }
 
-impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
+impl<K: Clone + PartialOrd, V: Clone, IC: NodeContainer<K, PageId>, DC: NodeContainer<K, V>>
+    BTreeStore<K, V, IC, DC>
+{
     const META_PAGE_ID: PageId = 1;
 
     pub fn new(root_dir: &str, config: BTreeConfig, min_key: K) -> Self {
@@ -47,7 +55,6 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
         let mut meta_page: MetaPage<K> = ps.new_page();
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
-        let mut data_cache;
         let (root_id, mut root_node) =
             DataNode::<K, V>::new(&ps.clone(), config.data_node_n, config.node_cap);
         let val = unsafe { MaybeUninit::uninit().assume_init() };
@@ -61,8 +68,8 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
             meta.min_key = min_key;
         }
 
-        let root_node = Arc::new(RwLock::new(root_node));
-        data_cache = LRUCache::new(config.data_cache_n);
+        let root_node = DC::new(root_node);
+        let mut data_cache = LRUCache::new(config.data_cache_n);
         data_cache.put(root_id, root_node);
 
         Self {
@@ -72,6 +79,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
             inner_cache: DashMap::new(),
             data_cache: RwLock::new(data_cache),
             updates: DashSet::new(),
+            _p: PhantomData,
         }
     }
 
@@ -90,10 +98,11 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
             inner_cache: DashMap::new(),
             data_cache: RwLock::new(data_cache),
             updates: DashSet::new(),
+            _p: PhantomData,
         }
     }
 
-    pub fn load_inner(&self, page_id: PageId) -> Option<Arc<RwLock<InnerNode<K>>>> {
+    pub fn load_inner(&self, page_id: PageId) -> Option<IC> {
         if page_id == PageId::MAX {
             return None;
         }
@@ -108,12 +117,12 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
                 self.config.node_cap,
             )
         };
-        let inner = Arc::new(RwLock::new(inner));
+        let inner = IC::new(inner);
         self.inner_cache.insert(page_id, inner.clone());
         Some(inner)
     }
 
-    pub fn load_data(&self, page_id: PageId) -> Option<Arc<RwLock<DataNode<K, V>>>> {
+    pub fn load_data(&self, page_id: PageId) -> Option<DC> {
         if page_id == PageId::MAX {
             return None;
         }
@@ -129,23 +138,23 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
                 self.config.node_cap,
             )
         };
-        let data = Arc::new(RwLock::new(data));
+        let data = DC::new(data);
         self.data_cache.write().unwrap().put(page_id, data.clone());
         Some(data)
     }
 
-    pub fn new_inner(&self) -> (PageId, Arc<RwLock<InnerNode<K>>>) {
+    pub fn new_inner(&self) -> (PageId, IC) {
         let (id, node) =
             InnerNode::<K>::new(&self.ps, self.config.inner_node_n, self.config.node_cap);
-        let node = Arc::new(RwLock::new(node));
+        let node = IC::new(node);
         self.inner_cache.insert(id, node.clone());
         (id, node)
     }
 
-    pub fn new_data(&self) -> (PageId, Arc<RwLock<DataNode<K, V>>>) {
+    pub fn new_data(&self) -> (PageId, DC) {
         let (id, node) =
             DataNode::<K, V>::new(&self.ps, self.config.data_node_n, self.config.node_cap);
-        let node = Arc::new(RwLock::new(node));
+        let node = DC::new(node);
         self.data_cache.write().unwrap().put(id, node.clone());
         (id, node)
     }
@@ -160,7 +169,7 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
         node.delete(&self.ps);
     }
 
-    pub fn update_data_cache(&self) {
+    pub fn update_cache(&self) {
         let mut keys = Vec::new();
         for id in self.updates.iter() {
             keys.push(*id);
@@ -169,14 +178,19 @@ impl<K: Clone + PartialOrd, V: Clone> BTreeStore<K, V> {
         self.data_cache.write().unwrap().update(keys);
     }
 
-    /// unsafe if any function is called before this function returns
     #[inline]
     pub fn flush(&self) -> FlushHandler {
         self.ps.flush()
     }
 }
 
-impl<K: Copy + PartialOrd + Eq + Hash + Debug, V: Clone> BTreeStore<K, V> {
+impl<
+        K: Copy + PartialOrd + Eq + Hash + Debug,
+        V: Clone,
+        IC: NodeContainer<K, PageId>,
+        DC: NodeContainer<K, V>,
+    > BTreeStore<K, V, IC, DC>
+{
     #[allow(dead_code)]
     pub fn dump(&self) {
         let mut ids = Vec::new();
@@ -189,7 +203,7 @@ impl<K: Copy + PartialOrd + Eq + Hash + Debug, V: Clone> BTreeStore<K, V> {
         for _i in 0..depth - 1 {
             for id in ids {
                 let node = self.load_inner(id).unwrap();
-                let node_g = node.read().unwrap();
+                let node_g = node.read();
                 print!("[<{} {},{}>", id, node_g.prev_id(), node_g.next_id());
                 let mut cursor = NodeCursor::new(&node_g);
                 loop {
@@ -209,10 +223,8 @@ impl<K: Copy + PartialOrd + Eq + Hash + Debug, V: Clone> BTreeStore<K, V> {
         }
         for id in ids {
             let node = self.load_data(id).unwrap();
-            let node_g = node.read().unwrap();
+            let node_g = node.read();
             print!("[<{} {},{}>", id, node_g.prev_id(), node_g.next_id());
-            // let list = node_g.dir().list();
-            // let mut p = list.null();
             let mut cursor = NodeCursor::new(&node_g);
             loop {
                 cursor.move_next();
@@ -239,7 +251,7 @@ impl<K: Copy + PartialOrd + Eq + Hash + Debug, V: Clone> BTreeStore<K, V> {
             let mut next_node_id = None;
             for (id, left, right) in ids {
                 let node = self.load_inner(id).unwrap();
-                let node_g = node.read().unwrap();
+                let node_g = node.read();
                 assert!(node_g.len() >= 1);
 
                 if let Some(next) = next_node_id {
@@ -284,7 +296,7 @@ impl<K: Copy + PartialOrd + Eq + Hash + Debug, V: Clone> BTreeStore<K, V> {
         let mut next_node_id = None;
         for (id, left, right) in ids {
             let node = self.load_data(id).unwrap();
-            let node_g = node.read().unwrap();
+            let node_g = node.read();
             assert!(node_g.len() >= 1);
 
             if let Some(next) = next_node_id {

@@ -106,15 +106,15 @@ impl<K, V> Drop for CacheList<K, V> {
 }
 
 /// LRU cache that need manually update
-pub struct LRUCache<K: Eq + Hash + Clone, V> {
+pub struct LRUCache<K: Eq + Hash + Clone, V: Clone> {
     map: HashMap<K, NonNull<CacheNode<K, V>>>,
     list: CacheList<K, V>,
     capacity: usize,
 }
 
-unsafe impl<K: Eq + Hash + Clone, V> Send for LRUCache<K, V> {}
+unsafe impl<K: Eq + Hash + Clone, V: Clone> Send for LRUCache<K, V> {}
 
-unsafe impl<K: Eq + Hash + Clone, V> Sync for LRUCache<K, V> {}
+unsafe impl<K: Eq + Hash + Clone, V: Clone> Sync for LRUCache<K, V> {}
 
 impl<K: Eq + Hash + Clone, V: Clone> LRUCache<K, V> {
     pub fn new(capacity: usize) -> Self {
