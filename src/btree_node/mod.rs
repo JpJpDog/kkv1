@@ -75,9 +75,11 @@ impl<K: PartialOrd + Clone + Default, V: Clone> Node<K, V> {
                 if &cursor.cur().key == key {
                     let block_id = cursor.cur().val;
                     self.page_list.set_block_kv(block_id, key, val);
+                    true
+                } else {
+                    // no enough space but can find old value
+                    false
                 }
-                // no enough space but can find old value
-                return false;
             };
         }
     }

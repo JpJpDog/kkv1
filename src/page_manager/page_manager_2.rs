@@ -19,7 +19,7 @@ use super::{
     persistencer::Persistencer,
 };
 
-pub struct PageManager1 {
+pub struct PageManager2 {
     written_map: Arc<AtomicPtr<DashMap<PageId, Arc<MmapMut>>>>,
     tmp_map: AtomicPtr<DashMap<PageId, Arc<MmapMut>>>,
     logging_map: Arc<AtomicPtr<DashMap<PageId, Arc<MmapMut>>>>,
@@ -34,18 +34,18 @@ pub struct PageManager1 {
     kill_flush_tx: Sender<()>,
 }
 
-pub struct FlushHandler1 {
+pub struct FlushHandler2 {
     finish_flush_rx: Receiver<()>,
 }
 
-impl FHandler for FlushHandler1 {
+impl FHandler for FlushHandler2 {
     fn join(&mut self) {
         self.finish_flush_rx.recv().unwrap();
     }
 }
 
-impl PManager for PageManager1 {
-    type FlushHandler = FlushHandler1;
+impl PManager for PageManager2 {
+    type FlushHandler = FlushHandler2;
 
     fn new(root_dir: &str) -> Self {
         Self::init(root_dir, false)
@@ -56,8 +56,8 @@ impl PManager for PageManager1 {
     }
 
     fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         let mmap = Arc::new(arc_self.persistencer.new_mmap(page_id));
         PageInner {
@@ -69,14 +69,14 @@ impl PManager for PageManager1 {
     }
 
     unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
-    where
-        Self: Sized,
+        where
+            Self: Sized,
     {
         let mmap = if let Some(page) = (&*arc_self.written_map.load(Ordering::SeqCst)).get(&page_id)
         {
             page.value().clone()
         } else if let Some(page) = if let Some(page) =
-            (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
+        (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
         {
             Some(page)
         } else if let Some(page) = (&*arc_self.logging_map.load(Ordering::SeqCst)).get(&page_id) {
@@ -125,7 +125,7 @@ impl PManager for PageManager1 {
         drop(set_flush_g);
         let (finish_flush_tx, finish_flush_rx) = unbounded();
         self.start_log_tx.send(finish_flush_tx).unwrap();
-        FlushHandler1 { finish_flush_rx }
+        FlushHandler2 { finish_flush_rx }
     }
 
     #[inline]
@@ -139,7 +139,7 @@ impl PManager for PageManager1 {
     }
 }
 
-impl PageManager1 {
+impl PageManager2 {
     fn init(root_dir: &str, load: bool) -> Self {
         let written_map = Arc::new(AtomicPtr::new(Box::into_raw(Box::new(DashMap::new()))));
         let tmp_map = AtomicPtr::new(Box::into_raw(Box::new(DashMap::new())));
@@ -220,13 +220,15 @@ impl PageManager1 {
     }
 }
 
-impl Drop for PageManager1 {
+impl Drop for PageManager2 {
     fn drop(&mut self) {
         self.kill_flush_tx.send(()).unwrap();
         self.kill_log_tx.send(()).unwrap();
         self.log_handler.take().unwrap().join().unwrap();
         self.flush_handler.take().unwrap().join().unwrap();
         unsafe {
+            drop(Box::from_raw(self.tmp_map.load(Ordering::SeqCst)));
+            drop(Box::from_raw(self.logging_map.load(Ordering::SeqCst)));
             drop(Box::from_raw(self.written_map.load(Ordering::SeqCst)));
             drop(Box::from_raw(self.log_map.load(Ordering::SeqCst)));
             drop(Box::from_raw(self.flush_map.load(Ordering::SeqCst)));

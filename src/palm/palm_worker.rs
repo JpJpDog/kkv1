@@ -137,6 +137,7 @@ impl<K: Clone + Ord + Default, V: Clone + Default> PALMWorker<K, V> {
                         if !data.write().insert(key, val) {
                             let (rid, mut right) = self.store.new_data();
                             data_ids.insert(data_idx, (rid, off));
+                            // !! todo: change old_right's prev id
                             data.write().split_to(right.write(), None);
                             // insert the new kv
                             if &right.read().first().unwrap().key > key {
@@ -194,6 +195,7 @@ impl<K: Clone + Ord + Default, V: Clone + Default> PALMWorker<K, V> {
                         if !inner.write().insert(key, id) {
                             let (rid, mut right) = self.store.new_inner();
                             inner_ids.insert(inner_idx, (rid, *idx));
+                            // !! todo: change old_right's prev id
                             inner.write().split_to(right.write(), None);
                             // insert new kv
                             if &right.read().first().unwrap().key > key {

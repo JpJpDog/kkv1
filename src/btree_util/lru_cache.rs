@@ -1,9 +1,9 @@
-use std::{collections::HashMap, hash::Hash, ptr::NonNull};
+use std::{collections::HashMap, hash::Hash, mem::MaybeUninit, ptr::NonNull};
 
 use crate::util::KV;
 
 struct CacheNode<K, V> {
-    kv: KV<K, V>,
+    kv: MaybeUninit<KV<K, V>>,
     next: Option<NonNull<CacheNode<K, V>>>,
     prev: NonNull<CacheNode<K, V>>,
 }
@@ -14,10 +14,10 @@ struct CacheList<K, V> {
     len: usize,
 }
 
-impl<K: Default, V: Default> CacheList<K, V> {
+impl<K, V> CacheList<K, V> {
     fn new() -> Self {
         let head = Box::new(CacheNode {
-            kv: KV::default(),
+            kv: MaybeUninit::uninit(),
             next: None,
             prev: NonNull::dangling(),
         });
@@ -46,7 +46,7 @@ impl<K: Default, V: Default> CacheList<K, V> {
 
     unsafe fn push_head(&mut self, key: K, val: V) -> NonNull<CacheNode<K, V>> {
         let node = Box::new(CacheNode {
-            kv: KV::new(key, val),
+            kv: MaybeUninit::new(KV::new(key, val)),
             next: self.head.as_ref().next,
             prev: self.head,
         });
@@ -116,7 +116,7 @@ unsafe impl<K: Eq + Hash + Clone, V: Clone> Send for LRUCache<K, V> {}
 
 unsafe impl<K: Eq + Hash + Clone, V: Clone> Sync for LRUCache<K, V> {}
 
-impl<K: Eq + Hash + Clone + Default, V: Clone + Default> LRUCache<K, V> {
+impl<K: Eq + Hash + Clone, V: Clone> LRUCache<K, V> {
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
@@ -130,11 +130,11 @@ impl<K: Eq + Hash + Clone + Default, V: Clone + Default> LRUCache<K, V> {
             if self.map.len() >= self.capacity {
                 if let Some(tail) = self.list.pop_tail() {
                     let tail = Box::from_raw(tail.as_ptr());
-                    assert!(self.map.remove(&tail.kv.key).is_some());
+                    assert!(self.map.remove(&tail.kv.assume_init_ref().key).is_some());
                 }
             }
             if let Some(node) = self.map.get_mut(&key) {
-                node.as_mut().kv.val = val;
+                node.as_mut().kv.assume_init_mut().val = val;
                 self.list.move_head(*node);
                 false
             } else {
@@ -169,7 +169,7 @@ impl<K: Eq + Hash + Clone + Default, V: Clone + Default> LRUCache<K, V> {
     pub fn get(&self, key: &K) -> Option<V> {
         self.map
             .get(key)
-            .map(|node| unsafe { node.as_ref().kv.val.clone() })
+            .map(|node| unsafe { node.as_ref().kv.assume_init_ref().val.clone() })
     }
 }
 

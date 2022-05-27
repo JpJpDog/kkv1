@@ -6,8 +6,8 @@ use std::fs::remove_dir_all;
 use std::path::Path;
 use std::ptr::NonNull;
 
-use super::{PALMTree, DEFAULT_PALM_CONFIG};
 use super::palm_msg::PALMResult;
+use super::{PALMTree, DEFAULT_PALM_CONFIG};
 use crate::page_manager::p_manager::FHandler;
 use crate::page_manager::FlushHandler;
 use crate::palm::palm_msg::PALMCmd;
@@ -106,6 +106,7 @@ fn test_persistence() {
             match r {
                 PALMResult::Insert => assert!(false),
                 PALMResult::Get(exist) => assert!(exist),
+                PALMResult::Remove => todo!(),
             }
         }
         off = min(off + batch_n, keys.len());

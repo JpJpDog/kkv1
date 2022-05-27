@@ -39,6 +39,7 @@ impl<K, V> PALMCmd<K, V> {
 pub enum PALMResult {
     Insert,
     Get(bool),
+    Remove,
 }
 
 pub struct DataReq<K, V> {

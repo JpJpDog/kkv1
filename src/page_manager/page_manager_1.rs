@@ -13,25 +13,25 @@ use super::{
     persistencer::Persistencer,
 };
 
-pub struct PageManager2 {
+pub struct PageManager1 {
     flushing: Arc<Mutex<()>>,
     written_map: DashMap<PageId, Arc<MmapMut>>,
     flush_map: Arc<DashMap<PageId, Arc<MmapMut>>>,
     persistencer: Arc<Persistencer>,
 }
 
-pub struct FlushHandler2 {
+pub struct FlushHandler1 {
     handler: Option<JoinHandle<()>>,
 }
 
-impl FHandler for FlushHandler2 {
+impl FHandler for FlushHandler1 {
     fn join(&mut self) {
         self.handler.take().unwrap().join().unwrap();
     }
 }
 
-impl PManager for PageManager2 {
-    type FlushHandler = FlushHandler2;
+impl PManager for PageManager1 {
+    type FlushHandler = FlushHandler1;
 
     #[inline]
     fn new(root_dir: &str) -> Self {
@@ -93,7 +93,7 @@ impl PManager for PageManager2 {
     }
 }
 
-impl PageManager2 {
+impl PageManager1 {
     fn init(root_dir: &str, init: bool) -> Self {
         Self {
             flushing: Arc::new(Mutex::new(())),
@@ -107,7 +107,7 @@ impl PageManager2 {
         }
     }
 
-    fn inner_flush(&self, is_try: bool) -> Option<FlushHandler2> {
+    fn inner_flush(&self, is_try: bool) -> Option<FlushHandler1> {
         let flushing = self.flushing.clone();
         let persistencer = self.persistencer.clone();
         let flush_map = self.flush_map.clone();
@@ -137,13 +137,13 @@ impl PageManager2 {
             persistencer.flush(&flush_map);
             flush_map.clear();
         });
-        Some(FlushHandler2 {
+        Some(FlushHandler1 {
             handler: Some(handler),
         })
     }
 
     #[inline]
-    pub fn try_flush(&self) -> Option<FlushHandler2> {
+    pub fn try_flush(&self) -> Option<FlushHandler1> {
         self.inner_flush(true)
     }
 }

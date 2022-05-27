@@ -11,11 +11,12 @@ use std::{
 
 use memmap2::MmapMut;
 use rand::random;
+use tokio::io::AsyncWriteExt;
 
 use super::{
     p_manager::{FHandler, PManager},
     page::PageRef,
-    page_manager_2::{FlushHandler1, PageManager1},
+    page_manager_2::{FlushHandler2 as FlushHandler, PageManager2 as PageManager},
     // page_manager_1::{FlushHandler1 as FlushHandler, PageManager1 as PageManager},
 };
 
@@ -47,16 +48,16 @@ fn pm_simple() {
     if Path::exists(Path::new(test_dir)) {
         remove_dir_all(test_dir).unwrap();
     }
-    let pm = Arc::new(PageManager1::new(test_dir));
-    let mut page = PageManager1::new_page::<TestPageRef>(pm.clone(), 0);
+    let pm = Arc::new(PageManager::new(test_dir));
+    let mut page = PageManager::new_page::<TestPageRef>(pm.clone(), 0);
     *page.write().a_mut() = 1;
     let mut handler = pm.flush();
     handler.join();
     let a = page.read().a();
     assert_eq!(*a, 1);
 
-    let pm = Arc::new(unsafe { PageManager1::load(test_dir) });
-    let page = unsafe { PageManager1::load_page::<TestPageRef>(pm.clone(), 0) };
+    let pm = Arc::new(unsafe { PageManager::load(test_dir) });
+    let page = unsafe { PageManager::load_page::<TestPageRef>(pm.clone(), 0) };
     let a = page.read().a();
     assert_eq!(*a, 1);
 }
@@ -74,7 +75,7 @@ fn pm_complicated() {
     if Path::exists(Path::new(test_dir)) {
         remove_dir_all(test_dir).unwrap();
     }
-    let pm = Arc::new(PageManager1::new(test_dir));
+    let pm = Arc::new(PageManager::new(test_dir));
     let thread_n = 4;
     let page_n_per_thread = 2000;
     let mut handlers = Vec::new();
@@ -84,14 +85,14 @@ fn pm_complicated() {
         let cnt = cnt.clone();
         let pm = pm.clone();
         let h = thread::spawn(move || {
-            let mut guard: Option<FlushHandler1> = None;
+            let mut guard: Option<FlushHandler> = None;
             for id in start..start + page_n_per_thread {
-                let _page = PageManager1::new_page::<TestPageRef>(pm.clone(), id);
+                let _page = PageManager::new_page::<TestPageRef>(pm.clone(), id);
             }
             let mut set = HashSet::new();
             for _j in 0..100000 {
                 let old = cnt.fetch_add(1, Ordering::SeqCst);
-                if old % 1000 == 0 {
+                if old % 100 == 0 {
                     if let Some(mut f) = guard {
                         f.join();
                     }
@@ -99,7 +100,7 @@ fn pm_complicated() {
                 }
                 let op = random::<u32>() % 10;
                 let id = start + random::<u32>() % page_n_per_thread;
-                let mut page = unsafe { PageManager1::load_page::<TestPageRef>(pm.clone(), id) };
+                let mut page = unsafe { PageManager::load_page::<TestPageRef>(pm.clone(), id) };
                 if op < 6 {
                     let a = page.read().a();
                     assert_eq!(*a, if set.get(&id).is_some() { 1 } else { 0 });

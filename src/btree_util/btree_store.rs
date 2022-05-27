@@ -10,19 +10,19 @@ use dashmap::{DashMap, DashSet};
 use crate::{
     btree_node::{DataNode, InnerNode, NodeCursor, NodeId},
     btree_util::{lru_cache::LRUCache, meta_page::MetaPage},
-    page_manager::{page::PageId, FlushHandler},
+    page_manager::FlushHandler,
     page_system::PageSystem,
 };
 
 use super::node_container::{LockNodeContainer, NodeContainer, RawNodeContainer};
 
-pub struct BTreeConfig {
+pub struct BTreeStoreConfig {
     pub inner_node_n: usize,
     pub data_node_n: usize,
     pub data_cache_n: usize,
     pub node_cap: usize,
 }
-pub const DEFAULT_BTREE_STORE_CONFIG: BTreeConfig = BTreeConfig {
+pub const DEFAULT_BTREE_STORE_CONFIG: BTreeStoreConfig = BTreeStoreConfig {
     inner_node_n: 1,
     data_node_n: 1,
     data_cache_n: 1024,
@@ -32,27 +32,28 @@ pub const DEFAULT_BTREE_STORE_CONFIG: BTreeConfig = BTreeConfig {
 pub struct BTreeStore<
     K: Clone + PartialOrd,
     V: Clone,
-    IC: NodeContainer<K, PageId>,
+    IC: NodeContainer<K, NodeId>,
     DC: NodeContainer<K, V>,
 > {
     pub meta: RwLock<MetaPage<K>>,
-    config: BTreeConfig,
+    config: BTreeStoreConfig,
     ps: Arc<PageSystem>,
-    inner_cache: DashMap<PageId, IC>,
-    data_cache: RwLock<LRUCache<PageId, DC>>,
-    updates: DashSet<PageId>,
+    inner_cache: DashMap<NodeId, IC>,
+    data_cache: RwLock<LRUCache<NodeId, DC>>,
+    updates: DashSet<NodeId>,
     _p: PhantomData<V>,
 }
 
 impl<
         K: Clone + PartialOrd + Default,
         V: Clone + Default + Default,
-        IC: NodeContainer<K, PageId>,
+        IC: NodeContainer<K, NodeId>,
         DC: NodeContainer<K, V>,
     > BTreeStore<K, V, IC, DC>
 {
-    pub fn new(root_dir: &str, config: BTreeConfig, min_key: K) -> Self {
+    pub fn new(root_dir: &str, config: BTreeStoreConfig, min_key: K) -> Self {
         let ps = Arc::new(PageSystem::new(root_dir));
+        println!("aaa");
         let mut meta_page: MetaPage<K> = ps.new_page();
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
@@ -68,11 +69,10 @@ impl<
             meta.len = 0;
             meta.min_key = min_key;
         }
-
+        println!("aaa");
         let root_node = DC::new(root_node);
         let mut data_cache = LRUCache::new(config.data_cache_n);
         data_cache.put(root_id, root_node);
-
         Self {
             config,
             ps,
@@ -88,13 +88,13 @@ impl<
 impl<
         K: Clone + PartialOrd + Default,
         V: Clone + Default,
-        IC: NodeContainer<K, PageId>,
+        IC: NodeContainer<K, NodeId>,
         DC: NodeContainer<K, V>,
     > BTreeStore<K, V, IC, DC>
 {
-    const META_PAGE_ID: PageId = 1;
+    const META_PAGE_ID: NodeId = 1;
 
-    pub unsafe fn load(root_dir: &str, config: BTreeConfig) -> Self {
+    pub unsafe fn load(root_dir: &str, config: BTreeStoreConfig) -> Self {
         let ps = Arc::new(PageSystem::load(root_dir));
         let meta_page: MetaPage<K> = ps.load_page(Self::META_PAGE_ID);
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
@@ -111,48 +111,48 @@ impl<
         }
     }
 
-    pub fn load_inner(&self, page_id: PageId) -> Option<IC> {
-        if page_id == PageId::MAX {
+    pub fn load_inner(&self, node_id: NodeId) -> Option<IC> {
+        if node_id == NodeId::MAX {
             return None;
         }
-        if let Some(inner) = self.inner_cache.get(&page_id) {
+        if let Some(inner) = self.inner_cache.get(&node_id) {
             return Some(inner.clone());
         }
         let inner = unsafe {
             InnerNode::<K>::load(
                 &self.ps,
                 self.config.inner_node_n,
-                page_id,
+                node_id,
                 self.config.node_cap,
             )
         };
         let inner = IC::new(inner);
-        self.inner_cache.insert(page_id, inner.clone());
+        self.inner_cache.insert(node_id, inner.clone());
         Some(inner)
     }
 
-    pub fn load_data(&self, page_id: PageId) -> Option<DC> {
-        if page_id == PageId::MAX {
+    pub fn load_data(&self, node_id: NodeId) -> Option<DC> {
+        if node_id == NodeId::MAX {
             return None;
         }
-        if let Some(data) = self.data_cache.read().unwrap().get(&page_id) {
-            self.updates.insert(page_id);
+        if let Some(data) = self.data_cache.read().unwrap().get(&node_id) {
+            self.updates.insert(node_id);
             return Some(data);
         }
         let data = unsafe {
             DataNode::<K, V>::load(
                 &self.ps,
                 self.config.data_node_n,
-                page_id,
+                node_id,
                 self.config.node_cap,
             )
         };
         let data = DC::new(data);
-        self.data_cache.write().unwrap().put(page_id, data.clone());
+        self.data_cache.write().unwrap().put(node_id, data.clone());
         Some(data)
     }
 
-    pub fn new_inner(&self) -> (PageId, IC) {
+    pub fn new_inner(&self) -> (NodeId, IC) {
         let (id, node) =
             InnerNode::<K>::new(&self.ps, self.config.inner_node_n, self.config.node_cap);
         let node = IC::new(node);
@@ -160,7 +160,7 @@ impl<
         (id, node)
     }
 
-    pub fn new_data(&self) -> (PageId, DC) {
+    pub fn new_data(&self) -> (NodeId, DC) {
         let (id, node) =
             DataNode::<K, V>::new(&self.ps, self.config.data_node_n, self.config.node_cap);
         let node = DC::new(node);
@@ -196,7 +196,7 @@ impl<
 impl<
         K: Copy + PartialOrd + Eq + Hash + Debug + Default,
         V: Clone + Default,
-        IC: NodeContainer<K, PageId>,
+        IC: NodeContainer<K, NodeId>,
         DC: NodeContainer<K, V>,
     > BTreeStore<K, V, IC, DC>
 {
@@ -298,7 +298,7 @@ impl<
                 }
                 next_node_id = Some(node_g.next_id());
             }
-            assert_eq!(next_node_id.unwrap(), PageId::MAX);
+            assert_eq!(next_node_id.unwrap(), NodeId::MAX);
             ids = ids1;
             ids1 = Vec::new();
         }
@@ -338,7 +338,7 @@ impl<
             }
             next_node_id = Some(node_g.next_id());
         }
-        assert_eq!(next_node_id.unwrap(), PageId::MAX);
+        assert_eq!(next_node_id.unwrap(), NodeId::MAX);
     }
 }
 
