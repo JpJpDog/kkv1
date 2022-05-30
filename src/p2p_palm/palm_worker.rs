@@ -138,7 +138,6 @@ impl<K: Clone + Ord + Default, V: Clone + Default> PALMWorker<K, V> {
         let find_last = *find_result[off + len - 1].last().unwrap();
         // println!("{} first: {}, last: {}", off, find_first, find_last);
         let normal = find_first != find_last || self.next_tx.is_none();
-        println!("normal: {}", normal);
         assert!(used_thread_n > self.worker_id);
         if used_thread_n != self.worker_id + 1 {
             if let Some(t) = &self.next_tx {

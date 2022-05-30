@@ -9,12 +9,13 @@ extern crate core;
 
 mod btree_node;
 mod btree_util;
-mod crabbing;
+pub mod crabbing;
+mod p2p_palm;
 mod page_manager;
 mod page_system;
 mod palm;
-mod p2p_palm;
 mod util;
+mod performance_test;
 
 #[cfg(test)]
 mod tests {

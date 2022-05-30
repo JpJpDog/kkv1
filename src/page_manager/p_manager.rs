@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use memmap2::MmapMut;
 
-use super::page::{PageInner, PageId, PageRef};
+use super::page::{PageId, PageInner, PageRef};
 
 pub trait FHandler {
-    fn join(&mut self);
+    fn join(&mut self) -> bool;
 }
 
 pub trait PManager {

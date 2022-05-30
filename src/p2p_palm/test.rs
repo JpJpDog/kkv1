@@ -2,9 +2,10 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::{collections::HashSet, fs::remove_dir_all, path::Path, ptr::NonNull};
 
+use crate::crabbing::{FlushHandler, FHandler};
 use crate::p2p_palm::palm_msg::{PALMReq, PALMRsp};
 
-use super::{PALMTree, DEFAULT_PALM_CONFIG};
+use super::{P2PPALMTree, DEFAULT_P2P_PALM_CONFIG};
 
 #[test]
 fn test1() {
@@ -13,18 +14,18 @@ fn test1() {
         remove_dir_all(test_dir).unwrap();
     }
 
-    let mut config = DEFAULT_PALM_CONFIG;
-    config.node_cap = 0;
-    config.thread_n = 40;
-    let palm = PALMTree::<u32, u32>::new(test_dir, config, 0);
+    let mut config = DEFAULT_P2P_PALM_CONFIG;
+    config.node_cap = 5;
+    config.thread_n = 20;
+    let palm = P2PPALMTree::<u32, u32>::new(test_dir, 0, config);
     let mut rng = StdRng::seed_from_u64(0);
-    let batch_n = 1000;
-    let test_n = 10000000;
-    let max_key = 100000000;
+    let batch_n = 100;
+    let test_n = 10000;
+    let max_key = 100000;
     let mut vals = vec![0; batch_n];
     let mut cnt = 0;
-    // let mut handler: Option<FlushHandler> = None;
-    // let mut key_set = HashSet::new();
+    let mut handler: Option<FlushHandler> = None;
+    let mut key_set = HashSet::new();
     while cnt < test_n {
         let mut reqs = Vec::new();
         for val in vals.iter_mut() {
@@ -45,28 +46,28 @@ fn test1() {
         }
         // println!();
 
-        let _results = palm.op(reqs.clone());
-        // for (i, r) in results.into_iter().enumerate() {
-        //     let key = reqs[i].key();
-        //     match r {
-        //         PALMRsp::Insert => {
-        //             key_set.insert(*key);
-        //         }
-        //         PALMRsp::Get(exist) => {
-        //             assert_eq!(key_set.get(&key).is_some(), exist);
-        //         }
-        //         PALMRsp::Remove => todo!(),
-        //     }
-        // }
-        // if let Some(mut h) = handler {
-        //     h.join();
-        // }
-        // handler = Some(palm.flush());
+        let results = palm.op(reqs.clone());
+        for (i, r) in results.into_iter().enumerate() {
+            let key = reqs[i].key();
+            match r {
+                PALMRsp::Insert => {
+                    key_set.insert(*key);
+                }
+                PALMRsp::Get(exist) => {
+                    assert_eq!(key_set.get(&key).is_some(), exist);
+                }
+                PALMRsp::Remove => todo!(),
+            }
+        }
+        if let Some(mut h) = handler {
+            h.join();
+        }
+        handler = Some(palm.flush());
         // palm.store.dump();
         // palm.store.check();
     }
-    
-    // if let Some(mut h) = handler {
-    //     h.join();
-    // }
+
+    if let Some(mut h) = handler {
+        h.join();
+    }
 }

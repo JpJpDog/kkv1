@@ -53,7 +53,6 @@ impl<
 {
     pub fn new(root_dir: &str, config: BTreeStoreConfig, min_key: K) -> Self {
         let ps = Arc::new(PageSystem::new(root_dir));
-        println!("aaa");
         let mut meta_page: MetaPage<K> = ps.new_page();
         assert_eq!(meta_page.page_id, Self::META_PAGE_ID);
 
@@ -69,7 +68,6 @@ impl<
             meta.len = 0;
             meta.min_key = min_key;
         }
-        println!("aaa");
         let root_node = DC::new(root_node);
         let mut data_cache = LRUCache::new(config.data_cache_n);
         data_cache.put(root_id, root_node);

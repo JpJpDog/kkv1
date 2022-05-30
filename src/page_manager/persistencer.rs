@@ -85,11 +85,15 @@ impl Persistencer {
             file.set_len((PAGE_SIZE * PAGE_PER_FILE) as u64).unwrap();
             file
         } else {
-            File::options()
+            let file = File::options()
                 .read(true)
                 .write(true)
                 .open(file_dir)
-                .unwrap()
+                .unwrap();
+            while file.metadata().unwrap().len() != 0 {
+                break;
+            }
+            file
         }
     }
 

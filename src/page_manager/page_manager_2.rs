@@ -39,8 +39,8 @@ pub struct FlushHandler2 {
 }
 
 impl FHandler for FlushHandler2 {
-    fn join(&mut self) {
-        self.finish_flush_rx.recv().unwrap();
+    fn join(&mut self) -> bool {
+        self.finish_flush_rx.recv().is_ok()
     }
 }
 
@@ -56,8 +56,8 @@ impl PManager for PageManager2 {
     }
 
     fn new_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         let mmap = Arc::new(arc_self.persistencer.new_mmap(page_id));
         PageInner {
@@ -69,14 +69,14 @@ impl PManager for PageManager2 {
     }
 
     unsafe fn load_page<T: PageRef>(arc_self: Arc<Self>, page_id: PageId) -> PageInner<T, Self>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         let mmap = if let Some(page) = (&*arc_self.written_map.load(Ordering::SeqCst)).get(&page_id)
         {
             page.value().clone()
         } else if let Some(page) = if let Some(page) =
-        (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
+            (&*arc_self.tmp_map.load(Ordering::SeqCst)).get(&page_id)
         {
             Some(page)
         } else if let Some(page) = (&*arc_self.logging_map.load(Ordering::SeqCst)).get(&page_id) {
@@ -112,9 +112,7 @@ impl PManager for PageManager2 {
             self.written_map.store(p, Ordering::SeqCst);
         } else {
             let written_map = self.written_map.load(Ordering::SeqCst);
-            let p = self
-                .tmp_map
-                .swap(self.written_map.load(Ordering::SeqCst), Ordering::SeqCst);
+            let p = self.tmp_map.swap(written_map, Ordering::SeqCst);
             self.written_map.store(p, Ordering::SeqCst);
             let tmp_map = unsafe { &*written_map };
             for e in tmp_map {
@@ -194,7 +192,7 @@ impl PageManager2 {
                         let finish_flush_tx = finish_flush_tx.unwrap();
                         persistencer1.flush(unsafe { &*flush_map1.load(Ordering::SeqCst) });
                         unsafe { &*flush_map1.load(Ordering::SeqCst) }.clear();
-                        finish_flush_tx.send(()).unwrap();
+                        let _ = finish_flush_tx.send(());
                         finish_flush_tx1.send(()).unwrap();
                     }
                     recv (kill_flush_rx) -> _ => {

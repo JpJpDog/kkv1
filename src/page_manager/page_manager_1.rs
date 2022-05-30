@@ -9,7 +9,7 @@ use memmap2::{MmapMut, MmapOptions};
 
 use super::{
     p_manager::{FHandler, PManager},
-    page::{PageInner, PageId, PageRef, PAGE_SIZE},
+    page::{PageId, PageInner, PageRef, PAGE_SIZE},
     persistencer::Persistencer,
 };
 
@@ -25,8 +25,9 @@ pub struct FlushHandler1 {
 }
 
 impl FHandler for FlushHandler1 {
-    fn join(&mut self) {
+    fn join(&mut self) -> bool {
         self.handler.take().unwrap().join().unwrap();
+        true
     }
 }
 

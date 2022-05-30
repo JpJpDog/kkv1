@@ -1,4 +1,4 @@
-mod palm_msg;
+pub mod palm_msg;
 mod palm_worker;
 #[cfg(test)]
 mod test;
@@ -22,19 +22,19 @@ use self::{
     palm_worker::PALMWorker,
 };
 
-struct PALMConfig {
-    thread_n: usize,
-    node_cap: usize,
+pub struct P2PPALMConfig {
+  pub   thread_n: usize,
+    pub node_cap: usize,
 }
 
-const DEFAULT_PALM_CONFIG: PALMConfig = PALMConfig {
+pub const DEFAULT_P2P_PALM_CONFIG: P2PPALMConfig = P2PPALMConfig {
     thread_n: 15,
     node_cap: 0,
 };
 
-struct PALMTree<K: Ord + Clone, V: Clone> {
+pub struct P2PPALMTree<K: Ord + Clone, V: Clone> {
     pub store: Arc<RawBTreeStore<K, V>>,
-    config: PALMConfig,
+    config: P2PPALMConfig,
     worker_req_txs: Vec<Sender<WorkerReq<K, V>>>,
     worker_rsp_rxs: Vec<Receiver<WorkerRsp<K>>>,
     worker_handlers: Vec<Option<JoinHandle<()>>>,
@@ -43,9 +43,9 @@ struct PALMTree<K: Ord + Clone, V: Clone> {
 impl<
         K: Ord + Clone + Send + Sync + 'static + Default,
         V: Clone + Send + Sync + 'static + Default,
-    > PALMTree<K, V>
+    > P2PPALMTree<K, V>
 {
-    fn init(config: PALMConfig, store: Arc<RawBTreeStore<K, V>>) -> Self {
+    fn init(config: P2PPALMConfig, store: Arc<RawBTreeStore<K, V>>) -> Self {
         let thread_n = config.thread_n;
 
         let mut to_prev_list = Vec::new(); // idx is its receiver
@@ -91,14 +91,13 @@ impl<
         }
     }
 
-    pub unsafe fn load(root_dir: &str, config: PALMConfig) -> Self {
+    pub unsafe fn load(root_dir: &str, config: P2PPALMConfig) -> Self {
         let mut store_config = DEFAULT_BTREE_STORE_CONFIG;
         store_config.node_cap = config.node_cap;
         let store = Arc::new(RawBTreeStore::load(root_dir, store_config));
         Self::init(config, store)
-    }
-
-    pub fn new(root_dir: &str, config: PALMConfig, min_key: K) -> Self {
+    } 
+    pub fn new(root_dir: &str, min_key: K, config: P2PPALMConfig) -> Self {
         let mut store_config = DEFAULT_BTREE_STORE_CONFIG;
         store_config.node_cap = config.node_cap;
         let store = Arc::new(RawBTreeStore::new(root_dir, store_config, min_key));
@@ -233,7 +232,7 @@ impl<
     }
 }
 
-impl<K: Ord + Clone, V: Clone> Drop for PALMTree<K, V> {
+impl<K: Ord + Clone, V: Clone> Drop for P2PPALMTree<K, V> {
     fn drop(&mut self) {
         for end_tx in self.worker_req_txs.iter() {
             end_tx.send(WorkerReq::End).unwrap();

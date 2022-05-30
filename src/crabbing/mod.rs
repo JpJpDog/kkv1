@@ -3,6 +3,9 @@ mod test;
 
 use std::sync::{Arc, RwLockWriteGuard};
 
+pub use crate::page_manager::p_manager::FHandler;
+pub use crate::page_manager::FlushHandler;
+
 use crate::{
     btree_node::{DataNode, InnerNode, Node, NodeId},
     btree_util::{
@@ -10,7 +13,6 @@ use crate::{
         meta_page::MetaPage,
         node_container::{LockNodeContainer, NodeContainer},
     },
-    page_manager::FlushHandler,
     util::KV,
 };
 
@@ -27,7 +29,7 @@ pub struct BTreeConfig {
     pub node_cap: usize,
 }
 
-pub const DEFAULT_BTREE_CONFIG: BTreeConfig = BTreeConfig {
+pub const DEFAULT_CRABBING_CONFIG: BTreeConfig = BTreeConfig {
     optimistic: true,
     node_cap: 0,
 };
@@ -501,7 +503,7 @@ impl<K: Clone + Default + PartialOrd, V: Clone + Default> BTree<K, V> {
     }
 
     #[inline]
-    pub fn flush(&mut self) -> FlushHandler {
+    pub fn flush(&self) -> FlushHandler {
         self.store.flush()
     }
 
